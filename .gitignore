@@ -1,0 +1,4 @@
+*.wgt
+www
+.*
+node_modules
