@@ -1,0 +1,40 @@
+.skip-button-container {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 18%;
+    pointer-events: none;
+    z-index: 10000;
+}
+
+.skip-button {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 16%;
+    padding: 12px 20px;
+    color: black;
+    border: none;
+    border-radius: 100px;
+    font-weight: bold;
+    font-size: 1.2em;
+    transition: opacity 200ms ease-out;
+    gap: 3px;
+    box-shadow: 7px 6px 15px -14px rgba(0, 0, 0, 0.65);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .skip-button {
+        bottom: 27%;
+    }
+}
+
+.no-transition {
+    transition: none;
+}
+
+.skip-button-hidden {
+    opacity: 0;
+}
