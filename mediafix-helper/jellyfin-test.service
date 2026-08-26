@@ -1,0 +1,17 @@
+[Unit]
+Description = Jellyfin test instance (parallel, for custom UI testing)
+After = network-online.target
+
+[Service]
+Type = simple
+User = nitin
+Group = nitin
+Environment = HOME=/home/nitin
+ExecStart = /usr/bin/jellyfin -d /home/nitin/jellyfin-test/data -c /home/nitin/jellyfin-test/config -C /home/nitin/jellyfin-test/cache -l /home/nitin/jellyfin-test/log -w /home/nitin/jellyfin-test/web --ffmpeg=/usr/lib/jellyfin-ffmpeg/ffmpeg --nonetchange
+Restart = no
+TimeoutStopSec = 30
+StandardOutput = journal
+StandardError = journal
+
+[Install]
+WantedBy = multi-user.target
