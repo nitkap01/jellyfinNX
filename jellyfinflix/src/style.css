@@ -45,8 +45,8 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .ri-profiles .ic b { display: flex; align-items: center; justify-content: center; font-size: 24px; background: #2c6fd6; color: #fff; }
 
 /* buttons */
-.btn { display: inline-flex; align-items: center; height: 72px; padding: 0 38px; margin-right: 18px; border-radius: 999px; font-size: 28px; font-weight: 700; background: rgba(255,255,255,.2); color: var(--txt); white-space: nowrap; vertical-align: top; }
-.btn .ic { display: inline-flex; margin-right: 14px; font-size: 30px; }
+.btn { display: inline-flex; align-items: center; height: 64px; padding: 0 32px; margin-right: 16px; border-radius: 999px; font-size: 25px; font-weight: 700; background: rgba(255,255,255,.2); color: var(--txt); white-space: nowrap; vertical-align: top; }
+.btn .ic { display: inline-flex; margin-right: 12px; font-size: 27px; }
 .btn.btn-w { background: var(--txt); color: #000; }
 /* focus ring as a shadow so it follows the rounded shape (Chrome 76 outlines stay square) */
 .btn.f { background: var(--txt); color: #000; box-shadow: 0 0 0 4px var(--tv), 0 0 0 9px var(--txt); }
@@ -99,6 +99,8 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .fx-ep .fxi { width: 420px; height: 236px; transform: scale(1.08); overflow: visible; }
 .fx-ep .fxi::after { height: 236px; bottom: auto; }
 .fx-ep .ph { position: absolute; left: 16px; top: 12px; font-size: 24px; font-weight: 700; }
+/* the zoomed episode card shows only the picture; the title and length stay on the card underneath (no double text) */
+.fx-ep .ept, .fx-ep .epm { display: none; }
 .fxi img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
 .fxi .ph { position: absolute; left: 14px; right: 14px; bottom: 14px; font-size: 22px; color: var(--mut); }
 .fxi .ttl { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 16px 14px; background: linear-gradient(0deg, rgba(0,0,0,.85), rgba(0,0,0,0)); font-weight: 800; font-size: 24px; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
