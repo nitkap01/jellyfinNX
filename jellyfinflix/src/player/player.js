@@ -439,10 +439,16 @@ function startCountdown(my) {
   U.next.innerHTML = '';
   el('div', 'pn-h', U.next, 'Next Episode');
   el('div', 'pn-t', U.next, epLabel(n) + '  ' + n.Name);
-  const c = el('div', 'pn-c btn btn-w f', U.next);
+  // Two choices, like Netflix: play the next one now, or hide this card and keep watching to the end.
+  const row = el('div', 'pn-btns', U.next);
+  const c = el('div', 'pn-c btn btn-w', row);
   const lb = el('span', '', c, 'Play now · 10');
-  el('div', 'pn-hint', U.next, 'Back to keep watching the credits');
+  const k = el('div', 'pn-k btn', row);
+  el('span', '', k, 'Keep watching');
+  my.countdown.btns = [c, k]; my.countdown.sel = 0;
+  paintNext(my);
   U.next.classList.add('on');
+  log('next episode card', { next: n.Name });
   my.countdown.t = setInterval(() => {
     if (my !== st) return;
     my.countdown.n--;
@@ -450,6 +456,8 @@ function startCountdown(my) {
     if (my.countdown.n <= 0) playNext(my);
   }, 1000);
 }
+function paintNext(my) { if (my.countdown && my.countdown.btns) my.countdown.btns.forEach((b, i) => b.classList.toggle('f', i === my.countdown.sel)); }
+function keepWatching(my) { log('next episode: keep watching'); my.dismissedNext = true; cancelCountdown(my); }
 function cancelCountdown(my) { if (my.countdown) { clearInterval(my.countdown.t); my.countdown = null; } U.next.classList.remove('on'); }
 function playNext(my) {
   if (!my.nextEp) return;
@@ -851,7 +859,7 @@ const layer = {
       return true;
     }
     if (k === 'back') {
-      if (st.countdown) { st.dismissedNext = true; cancelCountdown(st); return true; }
+      if (st.countdown) { keepWatching(st); return true; }
       close();
       return true;
     }
@@ -859,7 +867,8 @@ const layer = {
     if (k === 'play' || k === 'pause' || k === 'playpause') { if (k === 'playpause' || (k === 'play') === st.paused) togglePause(); setZone(z === 'none' ? 'ctrls' : z); return true; }
     if (k === 'ff' || k === 'rw') { if (z === 'none' || z === 'ctrls') setZone('bar'); seekStep(k === 'ff' ? 1 : -1, e && e.repeat); return true; }
     if (k === 'next') { if (st.nextEp) playNext(st); return true; }
-    if (st.countdown && k === 'ok') { playNext(st); return true; }
+    if (st.countdown && (k === 'left' || k === 'right')) { st.countdown.sel = k === 'right' ? 1 : 0; paintNext(st); return true; }
+    if (st.countdown && k === 'ok') { if (st.countdown.sel === 1) keepWatching(st); else playNext(st); return true; }
     if (z === 'none') {
       if (k === 'left' || k === 'right') { setZone('bar'); seekStep(k === 'right' ? 1 : -1, e && e.repeat); return true; }
       if (k === 'ok') { if (st.intro) { skipIntro(); return true; } togglePause(); st.ci = 0; setZone('ctrls'); return true; }

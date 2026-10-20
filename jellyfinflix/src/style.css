@@ -239,6 +239,8 @@ body.playing .player { display: block; }
 .p-skip.on { opacity: 1; visibility: visible; }
 .p-next { position: absolute; right: 90px; bottom: 250px; width: 620px; background: rgba(0,0,0,.86); border-radius: 12px; padding: 26px 30px; display: none; }
 .p-next.on { display: block; }
+.pn-btns { display: flex; margin-top: 22px; }
+.pn-btns .btn { margin-right: 14px; }
 .pn-h { font-size: 22px; color: var(--mut); text-transform: uppercase; letter-spacing: .08em; }
 .pn-t { font-size: 30px; font-weight: 700; margin: 8px 0 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pn-hint { font-size: 20px; color: var(--mut); margin-top: 16px; }
