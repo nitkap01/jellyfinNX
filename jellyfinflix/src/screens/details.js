@@ -1,4 +1,5 @@
-// "More Info" overlay: artwork, facts, Play/Resume, My List, seasons + episodes, More Like This.
+// "More Info" overlay: artwork, facts, Play/Resume, My List, More (Fix Audio / Fetch Subtitle / genres + cast),
+// seasons + episodes, More Like This. Kept calm on purpose: one meta line, a 3-line overview, one row of pill buttons.
 import { el, debounce, fmtRuntime, epLabel, progressPct, metrics, setFlag } from '../util.js';
 import { app } from '../app.js';
 import { S, get, send, COMMON, slim, backdropImg, logoImg, invalidate } from '../api.js';
@@ -9,11 +10,12 @@ import { nextUpFor } from '../data.js';
 import { playItem, prefetchPlayback, warmUp, coolDown } from '../player/player.js';
 import { runMediaFix, canMediaFix, watchFixStatus } from '../mediafix.js';
 import { ICON } from '../icons.js';
+import { log } from '../log.js';
 
 const P = (o) => Object.assign({}, COMMON, o);
 const ROWS_TOP = 590;
 
-let host, root, page, D, rows, cur, full, target, history = [], token = 0, stopFix = null, open = false, warmT = 0;
+let host, root, page, D, rows, cur, full, target, history = [], token = 0, stopFix = null, open = false, warmT = 0, quietResume = false;
 // Prepare the player for the main Play target once the page has been open a moment.
 function warmLater() { clearTimeout(warmT); warmT = setTimeout(() => { if (open && target && app.isTop(layer)) warmUp(target); }, 700); }
 
@@ -30,10 +32,11 @@ function build() {
   D.title = el('div', 'd-title', D.logoBox);
   D.sub = el('div', 'd-sub', info);
   D.meta = el('div', 'd-meta', info);
+  D.metaT = el('span', '', D.meta);
+  D.chip = el('span', 'd-chip', D.meta); // small "Audio fixed" / "Fixing audio" chip next to the facts
   D.ov = el('div', 'd-ov', info);
-  D.extra = el('div', 'd-extra', info);
   D.prog = el('div', 'd-prog', info);
-  D.fix = el('div', 'd-fix', info);
+  D.more = el('div', 'd-more', root);
   const rh = el('div', 'd-rows', page);
   rows = new Rows(rh, {
     target: page,
@@ -59,9 +62,10 @@ const layer = {
     return rows.key(k, e);
   },
   show() { root.classList.add('on'); setFlag('dt', true); },
-  hide() { root.classList.remove('on'); setFlag('dt', false); open = false; clearTimeout(warmT); coolDown(); if (stopFix) { stopFix(); stopFix = null; } },
+  hide() { closeMore(); quietResume = false; root.classList.remove('on'); setFlag('dt', false); open = false; clearTimeout(warmT); coolDown(); if (stopFix) { stopFix(); stopFix = null; } },
   resume() { // back from the player: refresh progress
     if (!cur) return;
+    if (quietResume) { quietResume = false; rows.focus(); return; } // the More menu closed: nothing changed
     setBg(backdropImg(cur, 1280));
     rows.focus();
     refresh();
@@ -122,41 +126,107 @@ function fillInfo(it, f) {
   if (it.Type !== 'Series' && it.RunTimeTicks) m.push(fmtRuntime(it.RunTimeTicks));
   if (it.Type === 'Series' && f && f.ChildCount) m.push(f.ChildCount + (f.ChildCount === 1 ? ' Season' : ' Seasons'));
   if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
-  if (f && f.HasSubtitles) m.push('CC');
-  D.meta.textContent = m.join('   ·   ');
+  D.metaT.textContent = m.join('   ·   ');
   D.ov.textContent = it.Overview || '';
-  if (f) {
-    const ex = [];
-    if (f.Genres && f.Genres.length) ex.push('Genres: ' + f.Genres.slice(0, 4).join(', '));
-    const cast = (f.People || []).filter((p) => p.Type === 'Actor').slice(0, 4).map((p) => p.Name);
-    if (cast.length) ex.push('Cast: ' + cast.join(', '));
-    D.extra.textContent = ex.join('   ·   ');
-  } else D.extra.textContent = '';
   const p = target ? progressPct(target) : 0;
   D.prog.textContent = p > 0 && p < 99 && target.RunTimeTicks ? Math.round(((100 - p) / 100) * target.RunTimeTicks / 6e8) + ' min left' : '';
-  D.fix.textContent = ''; D.fix.className = 'd-fix'; fixState = '';
+  if (it !== fixFor) { fixFor = it; fix = { state: '' }; paintChip(); }
 }
 
-// "Audio fixed" line: green tick when fixed, live progress bar while a fix runs (started anywhere), red note if it failed.
-let fixState = '';
+// Audio-fix state (mediafix-helper /status, polled while the page is open): a small chip next to the facts when fixed
+// or running; the full state (fixed / running with progress / failed) is in the More menu.
+let fix = { state: '' }, fixFor = null;
 function showFix(s) {
-  let state = 'no';
-  D.fix.textContent = '';
+  let n = { state: 'no', text: 'Not fixed yet' };
   if (s.state === 'running') {
-    state = 'run';
-    D.fix.className = 'd-fix run';
     const pct = s.progressPercent;
-    el('span', '', D.fix, 'Fixing audio: ' + (s.progressPhase || 'starting') + (pct != null ? ' ' + pct + '%' : ''));
-    el('i', '', el('div', 'fixbar', D.fix)).style.transform = 'scaleX(' + (pct || 0) / 100 + ')';
-  } else if (s.fixed) {
-    state = 'ok'; D.fix.className = 'd-fix ok'; el('span', 'ic', D.fix).innerHTML = ICON.check; el('span', '', D.fix, 'Audio fixed');
-  } else if (s.lastResultStatus && !/^(OK|DRYRUN)/.test(s.lastResultStatus)) {
-    state = 'bad'; D.fix.className = 'd-fix bad'; D.fix.textContent = 'Last audio fix failed (' + s.lastResultStatus + ')';
-  } else { D.fix.className = 'd-fix'; D.fix.textContent = 'Audio fixed: No'; }
-  if (state !== fixState) { fixState = state; rows.upsert(btnDef(), buttons()); }
+    n = { state: 'run', pct: pct || 0, text: 'Fixing audio: ' + (s.progressPhase || 'starting') + (pct != null ? ' ' + pct + '%' : '') };
+  } else if (s.fixed) n = { state: 'ok', text: 'Audio fixed' };
+  else if (s.lastResultStatus && !/^(OK|DRYRUN)/.test(s.lastResultStatus)) n = { state: 'bad', text: 'Last fix failed (' + s.lastResultStatus + ')' };
+  if (n.state === fix.state && n.text === fix.text) return;
+  fix = n;
+  paintChip();
+  if (M) drawMore();
+}
+function paintChip() {
+  D.chip.textContent = '';
+  D.chip.className = 'd-chip' + (fix.state === 'ok' || fix.state === 'run' ? ' ' + fix.state : '');
+  if (fix.state === 'ok') { el('span', 'ic', D.chip).innerHTML = ICON.check; el('span', '', D.chip, 'Audio fixed'); } else if (fix.state === 'run') el('span', '', D.chip, 'Fixing audio' + (fix.pct ? ' ' + fix.pct + '%' : ''));
 }
 
-function btnDef() { return { id: 'btns', kind: 'btn', order: 0, onOk: (b) => act(b.act) }; }
+// ---- "More" menu: a small popup over the page, above the More button ----
+let M = null; // { items, i }
+function moreItems() {
+  const a = [];
+  if (S.admin && full && canMediaFix(full)) {
+    a.push({ act: 'fix-audio', icon: 'wrench', label: 'Fix Audio', badge: fix.state === 'ok' ? { text: 'Audio fixed', cls: 'ok' } : fix.state === 'run' ? { text: 'Running' + (fix.pct ? ' ' + fix.pct + '%' : ''), cls: 'run' } : fix.state === 'bad' ? { text: 'Failed', cls: 'bad' } : null });
+    a.push({ act: 'fix-subtitle', icon: 'sub', label: 'Fetch Subtitle' });
+  }
+  return a;
+}
+function detailsLines() {
+  const f = full;
+  if (!f) return ['Loading details…'];
+  const out = [];
+  if (f.Genres && f.Genres.length) out.push(['Genres', f.Genres.slice(0, 5).join(', ')]);
+  const cast = (f.People || []).filter((p) => p.Type === 'Actor').slice(0, 6).map((p) => p.Name);
+  if (cast.length) out.push(['Cast', cast.join(', ')]);
+  const dir = (f.People || []).filter((p) => p.Type === 'Director').slice(0, 2).map((p) => p.Name);
+  if (dir.length) out.push(['Director', dir.join(', ')]);
+  if (f.Studios && f.Studios.length) out.push(['Studio', f.Studios.slice(0, 2).map((x) => x.Name).join(', ')]);
+  if (f.HasSubtitles) out.push(['Subtitles', 'Available']);
+  if (fix.state === 'bad' || fix.state === 'run') out.push(['Audio', fix.text]);
+  return out.length ? out : ['No more details for this title.'];
+}
+function openMore(btnEl) {
+  M = { items: moreItems(), i: 0, btn: btnEl };
+  drawMore();
+  // anchor above the More button (one layout read, on OK only)
+  const r = btnEl ? btnEl.getBoundingClientRect() : { left: 150, top: 600 };
+  D.more.style.transform = 'translate3d(' + Math.round(Math.min(r.left, 1920 - 700)) + 'px,0,0)';
+  D.more.style.bottom = Math.round(1080 - r.top + 18) + 'px';
+  D.more.classList.add('on');
+  app.push(moreLayer);
+  log('details more menu', { items: M.items.map((x) => x.act), fix: fix.state });
+}
+function drawMore() {
+  if (!M) return;
+  const keep = M.items[M.i] && M.items[M.i].act;
+  M.items = moreItems();
+  const j = M.items.findIndex((x) => x.act === keep);
+  M.i = j >= 0 ? j : Math.min(M.i, Math.max(0, M.items.length - 1));
+  D.more.textContent = '';
+  M.items.forEach((it, i) => {
+    const b = el('div', 'dm-i' + (i === M.i ? ' f' : ''), D.more);
+    el('span', 'ic', b).innerHTML = ICON[it.icon] || '';
+    el('span', 'lb', b, it.label);
+    if (it.badge) { const g = el('span', 'bbadge ' + it.badge.cls, b); if (it.badge.cls === 'ok') el('span', 'ic', g).innerHTML = ICON.check; el('span', '', g, it.badge.text); }
+  });
+  if (fix.state === 'run' && M.items.length) el('i', '', el('div', 'fixbar dm-bar', D.more)).style.transform = 'scaleX(' + (fix.pct || 0) / 100 + ')';
+  const d = el('div', 'dm-d', D.more);
+  el('div', 'dm-h', d, 'Details');
+  for (const x of detailsLines()) {
+    const l = el('div', 'dm-l', d);
+    if (typeof x === 'string') l.textContent = x; else { el('b', '', l, x[0] + ': '); el('span', '', l, x[1]); }
+  }
+}
+function closeMore() { if (M) app.pop(moreLayer); }
+const moreLayer = {
+  overlay: true,
+  key(k) {
+    if (!M) return true;
+    if (k === 'back' || k === 'left' || k === 'right') { closeMore(); return true; }
+    if (k === 'up' && M.i > 0) { M.i--; drawMore(); } else if (k === 'down' && M.i < M.items.length - 1) { M.i++; drawMore(); } else if (k === 'ok') {
+      const it = M.items[M.i];
+      closeMore();
+      if (it) act(it.act);
+    }
+    return true;
+  },
+  hide() { M = null; D.more.classList.remove('on'); D.more.textContent = ''; quietResume = true; },
+};
+
+function btnDef() { return { id: 'btns', kind: 'btn', order: 0, onOk: (b, i, row) => (b.act === 'more' ? openMore(row.cards[i]) : act(b.act)) }; }
 
 function buttons() {
   const b = [];
@@ -168,10 +238,7 @@ function buttons() {
   if (p > 0 && p < 99) b.push({ label: 'Start Over', icon: 'restart', act: 'restart' });
   const fav = cur.UserData && cur.UserData.IsFavorite;
   b.push({ label: 'My List', icon: fav ? 'check' : 'list', act: 'fav' });
-  if (S.admin && full && canMediaFix(full)) {
-    b.push({ label: 'Fix Audio', icon: 'wrench', act: 'fix-audio', badge: fixState === 'ok' ? { text: 'fixed', cls: 'ok' } : fixState === 'run' ? { text: 'running', cls: 'run' } : fixState === 'bad' ? { text: 'failed', cls: 'bad' } : null });
-    b.push({ label: 'Fetch Subtitle', icon: 'sub', act: 'fix-subtitle' });
-  }
+  b.push({ label: 'More', icon: 'more', act: 'more' }); // Fix Audio, Fetch Subtitle, genres + cast
   return b;
 }
 
@@ -229,6 +296,7 @@ async function loadSeries(my) {
 }
 
 async function loadEpisodes(seasonIdWanted, my) {
+  const changed = seasonId !== seasonIdWanted;
   seasonId = seasonIdWanted;
   const sid = cur.Type === 'Series' ? cur.Id : cur.SeriesId;
   try {
@@ -240,7 +308,9 @@ async function loadEpisodes(seasonIdWanted, my) {
     if (row) {
       const focusId = target && target.Type === 'Episode' ? target.Id : null;
       const j = focusId ? eps.findIndex((e) => e.Id === focusId) : -1;
-      if (j >= 0 && rows.row !== row) { row.idx = j; if (row.built) { rows.ensureCards(row); rows.scroll(row, false); } }
+      // the episode to play is in this season: show it; another season: start at its first episode
+      const k = j >= 0 ? j : changed ? 0 : -1;
+      if (k >= 0 && rows.row !== row && row.idx !== k) { row.idx = k; if (row.built) { rows.ensureCards(row); rows.scroll(row, false); } }
     }
   } catch (e) { /* keep what we have */ }
 }
