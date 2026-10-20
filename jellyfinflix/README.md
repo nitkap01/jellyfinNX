@@ -41,6 +41,10 @@ CSS variable (`--acc` in `src/style.css`, Cinema red `#e50914` today).
     (±2 s), quality (Original/direct play, 1080p, 720p, 480p, 360p → server transcode, keeps the position),
     zoom (fit, fill, stretch, original), next-episode autoplay on/off, repeat, playback info (direct play or
     transcode and why, codecs, resolution, bitrates), Fix Audio / Fetch Subtitle with the fixed badge;
+  - **Episodes panel** (episodes only, button next to Next Episode): seasons on the left, the season's episodes on the
+    right (thumbnail, number + title, runtime or minutes left, watched tick, progress, overview of the focused one,
+    "Now playing" on the current one) over the still-playing video; OK on another episode switches to it (resumes if
+    half-watched), Back closes it without a restart. Its data is fetched in the background when an episode starts;
   - Skip Intro when Jellyfin has intro segments; "Next episode" card with a 10 s countdown near the end;
   - resume from the last position; start/progress/stop are reported to Jellyfin so Continue Watching is right.
 - **Back** closes the top layer (menu → player → details), then goes to Home, then scrolls Home to the top,
@@ -77,6 +81,7 @@ node test/tv-func-player.mjs $W <movieId> # play, menu, subtitles, audio, seek, 
 node test/tv-func-settings.mjs $W <movieId> [<pgsMovieId>]   # quality/zoom/subtitle style+sync/burn-in
 node test/tv-func-seekhold.mjs $W <movieId>                  # hold Right / FF for seconds
 node test/tv-func-next.mjs $W <episodeId>                    # next-episode countdown + autoplay
+node test/tv-func-episodes.mjs $W <episodeId>                # Episodes panel: open, moves, seasons, Back, switch episode
 node test/desktop-shots.mjs /tmp/shots 'wait:3000;keys:Down;shot:home'   # screenshots in desktop Chromium
 ```
 `tv-trace.mjs`, `tv-layers.mjs`, `css-exp.mjs`, `bg-exp.sh` are the profiling tools used to find the slow parts.
@@ -96,6 +101,8 @@ Test hooks in the page: `__jfReset()`, `__jfOpen(id)`, `__jfPlayer()`, `__jfSeek
 | Seek press → bar/time update | — | 17–34 ms; video plays again 0.75–0.93 s after the last press |
 | Back from player / details → screen | — | 40–72 ms / 40–51 ms |
 | Menu (Audio & Subtitles) open | — | 20–35 ms |
+| Episodes panel open / move / Back | — | 40–75 ms (first open after app start 70–170 ms) / 21–25 ms avg (0 long tasks) / 27–49 ms |
+| Episodes panel: other season (cached / first time) · switch episode → first frame | — | 49–106 ms / 89–426 ms · 1.1–1.85 s |
 
 Long tasks still seen: the TV player's own `seekTo` (~0.3 s) and shutting the player down after Back
 (0.2–0.3 s) — both run after the screen has already changed.

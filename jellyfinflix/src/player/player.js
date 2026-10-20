@@ -10,6 +10,7 @@ import { deviceProfile, AUDIO_OK } from './profile.js';
 import { loadWebapis, avplayEngine, html5Engine } from './engines.js';
 import { runMediaFix, canMediaFix, fetchFixStatus } from '../mediafix.js';
 import { log, warn, error } from '../log.js';
+import { episodesPanel } from './episodes.js';
 
 const TICKS = 10000; // ticks per ms
 const UI_HIDE_MS = 3500;
@@ -101,6 +102,7 @@ function build() {
   U.next = el('div', 'p-next', root);
   U.menu = el('div', 'p-menu', root);
   U.pauseIco = el('div', 'p-big', root);
+  U.eps = episodesPanel(root, { choose: chooseEpisode, closed: closeEpisodes, hover: (e) => prefetchPlayback(e) });
 }
 
 function ctrlDefs() {
@@ -110,6 +112,7 @@ function ctrlDefs() {
     { id: 'fwd10', label: '', icon: 'fwd10' },
     { id: 'menu', label: 'Audio & Subtitles', icon: 'audio' },
   ];
+  if (st && st.item.Type === 'Episode' && st.item.SeriesId) c.push({ id: 'eps', label: 'Episodes', icon: 'episodes' });
   if (st && st.nextEp) c.push({ id: 'next', label: 'Next Episode', icon: 'next' });
   return c;
 }
@@ -183,7 +186,7 @@ async function start(item, opts) {
   my.t0 = t0;
   U.title.textContent = item.Type === 'Episode' ? item.SeriesName || item.Name : item.Name;
   U.sub.textContent = item.Type === 'Episode' ? epLabel(item) + '  “' + item.Name + '”' : '';
-  U.subs.textContent = ''; U.next.classList.remove('on'); U.skip.classList.remove('on'); U.menu.classList.remove('on');
+  U.subs.textContent = ''; U.next.classList.remove('on'); U.skip.classList.remove('on'); U.menu.classList.remove('on'); U.eps.close(true);
   U.spin.classList.add('on');
   showUi(false);
   drawBar();
@@ -212,6 +215,8 @@ async function start(item, opts) {
   if (item.Type === 'Episode' && item.SeriesId) {
     get('/Shows/' + item.SeriesId + '/Episodes', Object.assign({}, COMMON, { UserId: '{U}', StartItemId: item.Id, Limit: 2 }), 30000)
       .then((r) => { const n = (r.Items || [])[1]; if (my === st && n) { my.nextEp = slim(n); drawCtrls(); } }).catch(() => {});
+    // Episodes panel data (seasons + this season's episodes), fetched once playback has settled.
+    setTimeout(() => { if (my === st) U.eps.prefetch(item); }, 1500);
   }
   get('/Users/{U}/Items/' + item.Id, { Fields: 'Trickplay' }, 600000).then((f) => {
     if (my !== st || !f.Trickplay || !my.ms) return;
@@ -308,12 +313,12 @@ function onTime(my, ms) {
     U.spin.classList.remove('on');
   }
   my.pos = ms;
-  if (my.target == null && my.zone !== 'none') drawBar();
+  if (my.target == null && my.zone !== 'none' && my.zone !== 'eps') drawBar();
   // Skip Intro
   const intro = my.segs.find((s) => s.type === 'Intro' && ms >= s.s && ms < s.e - 1000);
   if (!!intro !== U.skip.classList.contains('on')) { U.skip.classList.toggle('on', !!intro); my.intro = intro || null; if (!intro && my.zone === 'skip') setZone('none'); }
   // Next episode countdown
-  if (my.nextEp && !my.dismissedNext && !my.countdown && my.dur && store.prefs.autoplay !== false && !my.repeat) {
+  if (my.nextEp && !my.dismissedNext && !my.countdown && my.dur && store.prefs.autoplay !== false && !my.repeat && my.zone !== 'eps') {
     const outro = my.segs.find((s) => s.type === 'Outro');
     const at = outro ? outro.s : my.dur - 30000;
     if (ms >= at && ms < my.dur - 1500) startCountdown(my);
@@ -364,7 +369,7 @@ function showUi(on) {
   clearTimeout(hideT);
   if (on) { drawBar(); drawCtrls(); hideT = setTimeout(autoHide, UI_HIDE_MS); }
 }
-function autoHide() { if (st && !st.paused && st.target == null && st.zone !== 'menu') { setZone('none'); } else if (st) hideT = setTimeout(autoHide, UI_HIDE_MS); }
+function autoHide() { if (st && !st.paused && st.target == null && st.zone !== 'menu' && st.zone !== 'eps') { setZone('none'); } else if (st) hideT = setTimeout(autoHide, UI_HIDE_MS); }
 function poke() { clearTimeout(hideT); hideT = setTimeout(autoHide, UI_HIDE_MS); }
 
 function setZone(z) {
@@ -372,7 +377,7 @@ function setZone(z) {
   U.bar.classList.toggle('f', z === 'bar');
   U.skip.classList.toggle('f', z === 'skip');
   if (z === 'none') { showUi(false); U.skip.classList.remove('f'); return; }
-  if (z === 'menu') return;
+  if (z === 'menu' || z === 'eps') return;
   if (!U.ui.classList.contains('on')) showUi(true); else { drawCtrls(); poke(); }
 }
 
@@ -785,6 +790,7 @@ async function stopPlayback(switching) {
   if (eng && my.started) { const t = eng.time(); if (t) my.pos = t; }
   if (eng) eng.stop();
   st = null;
+  U.eps.noteProgress(my.item, my.pos, my.dur);
   const p = report(my, 'stop');
   if (my.method === 'Transcode' && my.info) send('DELETE', '/Videos/ActiveEncodings', null, { DeviceId: store.deviceId, PlaySessionId: my.info.PlaySessionId }).catch(() => {});
   if (!switching) { await Promise.race([p, new Promise((r) => setTimeout(r, 1500))]); }
@@ -824,6 +830,12 @@ const layer = {
     if (!st) { if (k === 'back') close(); return true; }
     const z = st.zone;
     if (z === 'menu') { menuKey(k); return true; }
+    if (z === 'eps') {
+      if (k === 'play' || k === 'pause' || k === 'playpause') { if (k === 'playpause' || (k === 'play') === st.paused) togglePause(); return true; }
+      if (k === 'stop') { close(); return true; }
+      U.eps.key(k);
+      return true;
+    }
     if (k === 'back') {
       if (st.countdown) { st.dismissedNext = true; cancelCountdown(st); return true; }
       close();
@@ -862,14 +874,38 @@ const layer = {
         else if (id === 'back10') seekBy(-10000);
         else if (id === 'fwd10') seekBy(10000);
         else if (id === 'menu') openMenu();
+        else if (id === 'eps') openEpisodes();
         else if (id === 'next') playNext(st);
       }
       return true;
     }
     return true;
   },
-  hide() { clearTimeout(hideT); document.body.classList.remove('playing'); },
+  hide() { clearTimeout(hideT); document.body.classList.remove('playing'); if (U && U.eps) U.eps.close(true); },
 };
+
+// ---------- Episodes panel ----------
+function openEpisodes() {
+  if (!st || st.item.Type !== 'Episode') return;
+  showUi(false);
+  st.zone = 'eps';
+  U.eps.open(st.item);
+}
+function closeEpisodes() {
+  if (!st) return;
+  st.zone = 'none';
+  st.ci = Math.max(0, ctrlDefs().findIndex((c) => c.id === 'eps'));
+  setZone('ctrls');
+}
+function chooseEpisode(ep) {
+  if (!st) return;
+  metrics.marks.epChoose = Math.round(performance.now());
+  delete metrics.marks.playMs;
+  st.zone = 'none';
+  U.spin.classList.add('on');
+  // let the screen drop the panel first; stopping the TV player is a slow call
+  afterPaint(() => start(ep, {}));
+}
 
 function skipIntro() {
   if (!st || !st.intro) return;
@@ -886,7 +922,7 @@ export function playerState() {
   return {
     item: st.item.Name, method: st.method, engine: eng && eng.name, pos: Math.round(st.pos), dur: Math.round(st.dur), paused: st.paused,
     audio: st.audio, sub: st.sub, extCues: st.cues ? st.cues.length : 0, subText: U.subs.textContent, zone: st.zone,
-    menu: U.menu.classList.contains('on') ? U.menu.textContent.slice(0, 300) : '', intro: !!st.intro, nextEp: st.nextEp && st.nextEp.Name,
+    menu: U.menu.classList.contains('on') ? U.menu.textContent.slice(0, 300) : '', eps: U.eps.isOpen ? { side: U.eps.side(), focused: U.eps.focused() } : null, intro: !!st.intro, nextEp: st.nextEp && st.nextEp.Name,
     tracks: eng && eng.tracks ? eng.tracks().map((t) => t.type + ':' + t.index) : [],
   };
 }

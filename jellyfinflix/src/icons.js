@@ -22,5 +22,6 @@ export const ICON = {
   star: svg('<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/>', true),
   del: svg('<path d="M9 5h11v14H9l-6-7z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/>'),
   ff: svg('<path d="M3 5.5v13l8.5-6.5zM12.5 5.5v13L21 12z"/>', true),
+  episodes: svg('<rect x="3" y="9" width="18" height="11" rx="2"/><path d="M6 5.5h12M8.5 2.5h7"/>'),
   sub: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h3M12 15h5M7 11h10"/>'),
 };
