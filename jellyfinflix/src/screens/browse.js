@@ -16,7 +16,7 @@ export function browseScreen(host, cfg) {
   // cfg: { name, defs(), hero, title, exitPrompt }
   const root = el('div', 'screen browse' + (cfg.hero ? ' has-hero top' : ' no-hero'), host);
   let mode = cfg.hero ? 'top' : 'rows';
-  let featured = null, heroIdx = 0, shown = null;
+  let featured = null, heroIdx = 0, shown = null, target = null; // target = the title the billboard buttons act on
   let H = null;
   if (cfg.hero) {
     const h = el('div', 'hero', root);
@@ -74,6 +74,7 @@ export function browseScreen(host, cfg) {
     if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
     H.meta.textContent = m.join('   ·   ');
     H.ov.textContent = it.Overview || '';
+    target = it; setHeroBtns(it);   // buttons always match the title shown (also for a focused card in the first row)
   }
 
   // Billboard buttons follow the featured title: half-watched → Resume (time left) + Start Over + More Info, else Play + More Info.
@@ -95,18 +96,20 @@ export function browseScreen(host, cfg) {
     if (heroIdx >= H.btns.length) heroIdx = H.btns.length - 1;
   }
   function heroAct() {
-    const a = H.acts[heroIdx];
-    if (!featured) return;
-    if (a === 'info') openDetails(featured);
-    else playItem(featured, a === 'restart' ? { restart: true } : {});
+    const a = H.acts[heroIdx], it = target || featured;
+    if (!it) return;
+    if (a === 'info') openDetails(it);
+    else playItem(it, a === 'restart' ? { restart: true } : {});
   }
   function paintHeroBtns() {
-    if (featured) setHeroBtns(featured);
+    if (target || featured) setHeroBtns(target || featured);
     H.btns.forEach((b, j) => b.classList.toggle('f', mode === 'top' && j === heroIdx && app.isTop(api)));
   }
 
   function toTop() {
     if (!cfg.hero) return;
+    // Up from a card in the first row (e.g. Continue Watching): the buttons act on that card, not the featured title.
+    const keep = mode === 'rows' && rows.r === 0 && rows.item ? rows.item : featured;
     mode = 'top';
     root.classList.add('top');
     root.classList.remove('deep');
@@ -115,7 +118,7 @@ export function browseScreen(host, cfg) {
     rows.r = 0;
     rows.place();
     heroLater.cancel(); bgLater.cancel();
-    if (featured) { showHero(featured); setBg(backdropImg(featured, 1280)); }
+    if (keep) { shown = null; showHero(keep); setBg(backdropImg(keep, 1280)); }
     heroIdx = 0;
     paintHeroBtns();
   }
@@ -205,7 +208,7 @@ export function browseScreen(host, cfg) {
       loaded = true;
       const c = store.cacheGet(ck());
       if (c && c.rows) {
-        for (const r of c.rows) apply({ id: r.id, title: r.title, kind: r.kind, order: r.order, playDirect: r.playDirect, grid: r.grid, cached: true }, r.items);
+        for (const r of c.rows) apply({ id: r.id, title: r.title, kind: r.kind, order: r.order, grid: r.grid, cached: true }, r.items);
         if (c.hero && cfg.hero) { featured = c.hero; if (mode === 'top') { shown = null; showHero(featured); setBg(backdropImg(featured, 1280)); } }
       }
     }

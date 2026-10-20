@@ -64,7 +64,9 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .h-btns { margin-top: 30px; display: flex; flex-wrap: nowrap; align-items: center; }
 .h-btns .btn { height: 62px; padding: 0 30px; font-size: 24px; margin-right: 16px; flex: 0 0 auto; }
 .h-btns .btn .ic { margin-right: 12px; font-size: 26px; }
-.browse:not(.top) .h-btns { opacity: 0; }
+/* buttons stay visible while the first row is focused (they show what Up + OK will do); hidden only deeper down */
+.browse.deep .h-btns { opacity: 0; }
+.browse:not(.top) .h-btns .btn.btn-w { background: rgba(255,255,255,.85); }
 
 /* rows */
 .rows-host { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; }

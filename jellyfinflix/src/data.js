@@ -21,8 +21,8 @@ function genreRows(types, startOrder, count) {
 
 export function homeDefs() {
   return [
-    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, playDirect: true, load: resume('Movie,Episode') },
-    { id: 'nextup', title: 'Next Up', order: 20, dynamic: true, playDirect: true, load: nextUp },
+    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, load: resume('Movie,Episode') },
+    { id: 'nextup', title: 'Next Up', order: 20, dynamic: true, load: nextUp },
     { id: 'favs', title: 'My List', order: 30, dynamic: true, load: favs('Movie,Series') },
     { id: 'views', expand: () => get('/Users/{U}/Views', {}, 3600000).then((r) => (r.Items || [])
       .filter((v) => v.CollectionType === 'movies' || v.CollectionType === 'tvshows')
@@ -34,7 +34,7 @@ export function homeDefs() {
 
 export function moviesDefs() {
   return [
-    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, playDirect: true, load: resume('Movie') },
+    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, load: resume('Movie') },
     { id: 'new', title: 'Recently Added', kind: 'poster', order: 20, dynamic: true, load: query({ IncludeItemTypes: 'Movie', SortBy: 'DateCreated', SortOrder: 'Descending' }) },
     { id: 'favs', title: 'My List', order: 30, dynamic: true, load: favs('Movie') },
     { id: 'top', title: 'Top Rated Movies', order: 40, lazy: true, load: query({ IncludeItemTypes: 'Movie', SortBy: 'CommunityRating', SortOrder: 'Descending', MinCommunityRating: 7 }) },
@@ -45,8 +45,8 @@ export function moviesDefs() {
 
 export function showsDefs() {
   return [
-    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, playDirect: true, load: resume('Episode') },
-    { id: 'nextup', title: 'Next Up', order: 20, dynamic: true, playDirect: true, load: nextUp },
+    { id: 'resume', title: 'Continue Watching for ' + S.name, order: 10, dynamic: true, load: resume('Episode') },
+    { id: 'nextup', title: 'Next Up', order: 20, dynamic: true, load: nextUp },
     { id: 'new', title: 'Recently Added Shows', kind: 'poster', order: 30, dynamic: true, load: query({ IncludeItemTypes: 'Series', SortBy: 'DateLastContentAdded', SortOrder: 'Descending' }) },
     { id: 'favs', title: 'My List', order: 40, dynamic: true, load: favs('Series') },
     { id: 'top', title: 'Top Rated Shows', order: 50, lazy: true, load: query({ IncludeItemTypes: 'Series', SortBy: 'CommunityRating', SortOrder: 'Descending' }) },
