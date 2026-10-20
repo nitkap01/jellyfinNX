@@ -140,10 +140,12 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 /* dialogs, toast */
 .dlg { display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.72); opacity: 0; transition: opacity .12s; }
 .dlg.on { opacity: 1; }
-.dlg-card { width: 980px; background: var(--tv2); border-radius: 14px; padding: 50px 60px; }
+.dlg-card { min-width: 640px; max-width: 980px; background: var(--tv2); border-radius: 14px; padding: 56px 72px 60px; text-align: center; }
 .dlg-title { font-size: 40px; font-weight: 800; }
 .dlg-text { margin-top: 18px; font-size: 26px; color: #ccc; white-space: pre-line; max-height: 560px; overflow: hidden; }
-.dlg-btns { margin-top: 40px; }
+/* centred button row; margins instead of flex gap (Chrome 76 on the TV has no flex gap) */
+.dlg-btns { margin-top: 44px; display: flex; justify-content: center; }
+.dlg-btns .btn { min-width: 220px; justify-content: center; margin: 0 12px; }
 .toast { position: absolute; left: 510px; width: 900px; bottom: 60px; text-align: center; background: rgba(30,30,36,.96); padding: 18px 28px; border-radius: 10px; font-size: 24px; opacity: 0; transition: opacity .2s; }
 .toast.on { opacity: 1; }
 
