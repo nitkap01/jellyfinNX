@@ -10,15 +10,24 @@ MIN_VIDEO_BYTES=$((100 * 1024 * 1024))
 PICKER_ROOTS=("/MEDIA/Eng_Movies" "/MEDIA/Hin_Movies")
 LANGUAGE="en"
 LOCAL_DIR=""
+DRY_RUN=false
+NAMES_ONLY=false
 
 usage() {
   cat <<'EOF'
-Usage: fix-subtitles.sh [<movie-folder-or-video-file>]
+Usage: fix-subtitles.sh [--dry-run] [<movie-folder-or-video-file>]
+       fix-subtitles.sh --names <movie-folder-or-video-file>
 
 No path given: opens an interactive picker over /MEDIA/Eng_Movies and /MEDIA/Hin_Movies.
 Downloads the best-matching English subtitle (via subliminal) and saves it
-next to the movie with the same name (e.g. Movie.Name.mp4 -> Movie.Name.srt),
-overwriting any existing subtitle of that name.
+next to the movie as <name>.en.srt (e.g. Movie.Name.mp4 -> Movie.Name.en.srt, which
+Jellyfin lists as English), overwriting an existing subtitle of that name.
+If subliminal cannot use the real file name (e.g. "Title 2013 aka Other SS 1080p ..."),
+it retries with cleaned-up names: title + year (from the file name, then from the
+folder name like "Title (2014)") + resolution/source/codec tags.
+
+--dry-run  search and download into a temp folder only; nothing is written next to the movie.
+--names    only print the cleaned-up names that would be tried (no search, no download).
 EOF
 }
 
@@ -57,6 +66,70 @@ run_picker() {
   sel="$(list_picker_candidates | sort | "$fzf_bin" --height=80% --border --delimiter='\t' --with-nth=1 --prompt='Pick a movie: ' || true)"
   [ -n "$sel" ] || { printf 'No selection made.\n' >&2; exit 0; }
   printf '%s\n' "$sel" | awk -F'\t' '{print $2}'
+}
+
+# Cleaned-up video names for subliminal (one per line, best first), used when the real name fails.
+# Title + year from the file name, then title + year from the folder ("Title (2014)"), plus the
+# resolution / source / codec tags of the file name. Names only: subliminal guesses from them.
+clean_names() {
+  python3 - "$1" <<'PY'
+import os, re, sys
+src = sys.argv[1]
+stem, ext = os.path.splitext(os.path.basename(src))
+ext = ext if ext.lower() in ('.mkv', '.mp4', '.avi', '.m4v') else '.mkv'
+folder = os.path.basename(os.path.dirname(src))
+YEAR = r'(?<!\d)(19[2-9]\d|20[0-4]\d)(?!\d)'
+
+def words(t):
+    t = re.sub(r'\[[^\]]*\]|\{[^}]*\}', ' ', t)            # [YTS], {tags}
+    t = re.sub(r'^\s*www\.\S+\s*-?\s*', '', t, flags=re.I)  # site prefixes
+    return re.sub(r'[._()\-]+', ' ', t).split()
+
+def title_year(t):
+    w = words(t)
+    for i, x in enumerate(w):
+        if i > 0 and re.fullmatch(YEAR, x):
+            return ' '.join(w[:i]), x
+    return None, None
+
+def tags(t):
+    s = ' '.join(words(t))
+    out = []
+    for pat, norm in ((r'\b(2160p|1080p|720p|576p|480p)\b', None), (r'\b(blu ?ray|bdrip|brrip)\b', 'BluRay'),
+                      (r'\b(web dl|webdl)\b', 'WEB-DL'), (r'\bwebrip\b', 'WEBRip'), (r'\bhdtv\b', 'HDTV'), (r'\bdvdrip\b', 'DVDRip'),
+                      (r'\b(x265|hevc|h ?265)\b', 'x265'), (r'\b(x264|h ?264|avc)\b', 'x264')):
+        m = re.search(pat, s, re.I)
+        if m:
+            v = norm or m.group(1)
+            if v not in out:
+                out.append(v)
+    return out
+
+ft, fy = title_year(stem)
+dt, dy = title_year(folder)
+tg = tags(stem)
+cands = []
+for t, y in ((ft, fy), (dt, dy), (ft, dy), (dt, fy)):
+    if t and y:
+        n = '.'.join(t.split() + [y] + tg) + ext
+        if n not in cands:
+            cands.append(n)
+if not cands:  # no year anywhere: the file name up to its first tag
+    w = words(stem)
+    cut = next((i for i, x in enumerate(w) if i > 0 and tags(x)), len(w))
+    if w[:cut]:
+        cands.append('.'.join(w[:cut] + tg) + ext)
+for n in cands:
+    print(n)
+PY
+}
+
+# Runs subliminal for one path (real file or a bare name) into a fresh folder; prints the .srt it saved.
+try_subliminal() {
+  local what="$1" out
+  out="$(mktemp -d "$LOCAL_DIR/try-XXXXXX")"
+  "$SUBLIMINAL" download -l "$LANGUAGE" -s -f -d "$out" "$what" >&2 || true
+  find "$out" -maxdepth 1 -type f -iname '*.srt' -size +0 -print -quit
 }
 
 resolve_target() {
@@ -133,6 +206,14 @@ detect_cifs_mount() {
 main() {
   [ -x "$SUBLIMINAL" ] || die 1 "subliminal not found at $SUBLIMINAL. Run the one-time setup step first."
 
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) DRY_RUN=true; shift ;;
+      --names) NAMES_ONLY=true; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) break ;;
+    esac
+  done
   local arg="${1:-}"
   [ -z "$arg" ] && arg="$(run_picker)"
   resolve_target "$arg"
@@ -149,16 +230,37 @@ main() {
   mkdir -p "$WORK_DIR"
   LOCAL_DIR="$(mktemp -d "$WORK_DIR/subs-XXXXXX")"
 
-  log "Searching for an English subtitle for: $base"
-  "$SUBLIMINAL" download -l "$LANGUAGE" -s -f -d "$LOCAL_DIR" "$SRC" || true
+  if [ "$NAMES_ONLY" = "true" ]; then
+    clean_names "$SRC"
+    exit 0
+  fi
 
-  local local_srt="$LOCAL_DIR/$stem.srt"
-  [ -s "$local_srt" ] || die 3 "No matching subtitle found for: $base"
+  # Saved as <stem>.en.srt so Jellyfin lists it as English.
+  local out_name="$stem.$LANGUAGE.srt"
+
+  log "Searching for an English subtitle for: $base"
+  local local_srt name
+  local_srt="$(try_subliminal "$SRC")"
+  if [ -z "$local_srt" ]; then
+    # subliminal could not use the real name: retry with cleaned-up names (bare names, no file needed).
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      log "Nothing found with the file name; retrying as: $name"
+      local_srt="$(try_subliminal "$LOCAL_DIR/$name")"
+      [ -n "$local_srt" ] && break
+    done < <(clean_names "$SRC")
+  fi
+  [ -n "$local_srt" ] && [ -s "$local_srt" ] || die 3 "No matching subtitle found for: $base"
+
+  if [ "$DRY_RUN" = "true" ]; then
+    log "Dry run: found $(basename -- "$local_srt") ($(wc -l < "$local_srt") lines); would save: $dir/$out_name"
+    exit 0
+  fi
 
   detect_cifs_mount "$dir"
   if [ "$ON_CIFS" != "true" ]; then
-    cp "$local_srt" "$dir/$stem.srt"
-    log "Saved: $dir/$stem.srt"
+    cp "$local_srt" "$dir/$out_name"
+    log "Saved: $dir/$out_name"
     exit 0
   fi
 
@@ -169,21 +271,21 @@ main() {
   server="$(printf '%s' "$ON_CIFS_DEV" | sed -E 's#^//([^/]+)/.*#\1#')"
   share="$(printf '%s' "$ON_CIFS_DEV" | sed -E 's#^//[^/]+/([^/]+)$#\1#')"
 
-  out="$(smbclient "//${server}/${share}" -A "$AUTHFILE" -m SMB3 -D "$rel_dir" -c "put \"$local_srt\" \"$stem.srt\"" 2>&1)"
+  out="$(smbclient "//${server}/${share}" -A "$AUTHFILE" -m SMB3 -D "$rel_dir" -c "put \"$local_srt\" \"$out_name\"" 2>&1)"
   if printf '%s' "$out" | grep -q 'NT_STATUS_'; then
     die 4 "Upload failed: $out"
   fi
 
   local i=0 ok=false
   while [ $i -lt 5 ]; do
-    [ -s "$dir/$stem.srt" ] && { ok=true; break; }
+    [ -s "$dir/$out_name" ] && { ok=true; break; }
     sleep 1
     i=$((i + 1))
   done
   if [ "$ok" = "true" ]; then
-    log "Saved: $dir/$stem.srt"
+    log "Saved: $dir/$out_name"
   else
-    die 4 "Upload reported success but the file isn't visible yet through the read mount. Check manually: $dir/$stem.srt"
+    die 4 "Upload reported success but the file isn't visible yet through the read mount. Check manually: $dir/$out_name"
   fi
 }
 

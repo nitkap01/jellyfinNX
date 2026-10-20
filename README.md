@@ -80,10 +80,15 @@ Run it directly: `fix-movie-audio.sh [--dry-run] [--lra-threshold N] <movie-file
 
 ## `fix-subtitles.sh` — what it does
 
-Runs `subliminal` against a video file, saves the best-matching English `.srt` next
-to it (same name as the video), always overwriting an existing subtitle of that name.
+Runs `subliminal` against a video file, saves the best-matching English subtitle next
+to it as `<video name>.en.srt` (Jellyfin lists it as English), always overwriting an
+existing subtitle of that name. If subliminal cannot use the real file name (e.g.
+`Title 2013 aka Other SS 1080p BluRay x265 HEV.mkv` gives "0 video collected / 1 error"),
+it retries with cleaned-up names: title + year from the file name, then from the folder
+(`Title (2014)`), plus resolution/source/codec tags (`The.Borderlands.2013.1080p.BluRay.x265.mkv`).
 
-Run it directly: `fix-subtitles.sh <video-file>`.
+Run it directly: `fix-subtitles.sh [--dry-run] <video-file>` (`--dry-run` downloads to a temp
+folder only; `--names <video-file>` just prints the cleaned-up names it would try).
 
 ## Setup notes (for future reference, not a turnkey installer)
 
