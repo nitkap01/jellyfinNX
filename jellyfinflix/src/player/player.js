@@ -1,8 +1,8 @@
 // Full-screen player: Samsung AVPlay, Netflix-style controls, Skip Intro, next-episode countdown,
 // resume position and playback reporting so Continue Watching stays right.
-import { el, fmtClock, epLabel, metrics } from '../util.js';
+import { el, fmtClock, epLabel, metrics, fmtRuntime } from '../util.js';
 import { app } from '../app.js';
-import { S, get, send, COMMON, slim } from '../api.js';
+import { S, get, send, COMMON, slim, cardImg } from '../api.js';
 import { store } from '../store.js';
 import { ICON } from '../icons.js';
 import { toast, alertBox } from '../ui/dialog.js';
@@ -437,14 +437,21 @@ function startCountdown(my) {
   my.countdown = { n: 10 };
   const n = my.nextEp;
   U.next.innerHTML = '';
-  el('div', 'pn-h', U.next, 'Next Episode');
-  el('div', 'pn-t', U.next, epLabel(n) + '  ' + n.Name);
-  // Two choices, like Netflix: play the next one now, or hide this card and keep watching to the end.
-  const row = el('div', 'pn-btns', U.next);
+  // Card: episode picture left; label, title, length and the two choices right (Netflix style).
+  const th = el('div', 'pn-th', U.next);
+  const [src] = cardImg(n, 330, 186);
+  if (src) { const im = el('img', '', th); im.alt = ''; im.src = src; }
+  const body = el('div', 'pn-b', U.next);
+  el('div', 'pn-h', body, 'Next episode');
+  el('div', 'pn-t', body, epLabel(n) + ' · ' + n.Name);
+  if (n.RunTimeTicks) el('div', 'pn-m', body, fmtRuntime(n.RunTimeTicks));
+  const row = el('div', 'pn-btns', body);
   const c = el('div', 'pn-c btn btn-w', row);
+  const fill = el('i', 'pn-fill', c);
   const lb = el('span', '', c, 'Play now · 10');
   const k = el('div', 'pn-k btn', row);
   el('span', '', k, 'Keep watching');
+  requestAnimationFrame(() => requestAnimationFrame(() => fill.classList.add('go')));   // 10 s countdown bar
   my.countdown.btns = [c, k]; my.countdown.sel = 0;
   paintNext(my);
   U.next.classList.add('on');
