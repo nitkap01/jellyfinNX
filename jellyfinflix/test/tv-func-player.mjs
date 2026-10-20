@@ -7,7 +7,9 @@ const send = (method, params = {}) => new Promise((r) => { const i = ++id; pend.
 sock.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result ?? m.error); pend.delete(m.id); } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const KEYS = { Left: 37, Up: 38, Right: 39, Down: 40, Enter: 13, Back: 10009 };
-async function press(k, repeat) { await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: KEYS[k], nativeVirtualKeyCode: KEYS[k], autoRepeat: !!repeat }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: KEYS[k], nativeVirtualKeyCode: KEYS[k] }); }
+const down = (k) => send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: k, code: k, windowsVirtualKeyCode: KEYS[k], nativeVirtualKeyCode: KEYS[k] });
+const up = (k) => send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: KEYS[k], nativeVirtualKeyCode: KEYS[k] });
+async function press(k) { await down(k); await up(k); }
 async function keys(seq, gap = 350) { for (const p of seq.split(',')) { const [n, c] = p.split('*'); for (let i = 0; i < (+c || 1); i++) { await press(n); await sleep(gap); } } }
 const ev = async (x) => { const r = await send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true }); return r.exceptionDetails ? 'ERR ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text) : r.result?.value; };
 const P = () => ev('JSON.stringify(__jfPlayer())');
@@ -27,7 +29,7 @@ sock.onopen = async () => {
   await sleep(500);
   log('menu', await P());
   // subtitles column: first real subtitle
-  await keys('Right,Down,Enter');
+  await keys('Down,Right,Down,Enter'); // Subtitles -> first subtitle after Off
   await sleep(8000);
   const s1 = JSON.parse(await P());
   log('after sub select', { sub: s1.sub, extCues: s1.extCues, subText: s1.subText, tracks: s1.tracks });
@@ -36,13 +38,13 @@ sock.onopen = async () => {
   log('subtitle text seen', seen || '(none in 20 s)');
   // audio: second track
   await keys('Down'); await sleep(300); await keys('Right*3,Enter'); await sleep(500);
-  await keys('Down,Enter');
+  await keys('Right,Down,Enter'); // Audio -> second track
   await sleep(5000);
   const a = JSON.parse(await P());
   log('after audio select', { audio: a.audio, method: a.method, pos: a.pos });
   // seek forward far (hold Right) so Jellyfin keeps a resume point
   const before = JSON.parse(await P()).pos;
-  for (let i = 0; i < 30; i++) { await press('Right', i > 0); await sleep(60); }
+  await down('Right'); for (let i = 0; i < 30; i++) { await sleep(100); await down('Right'); } await up('Right'); // held like the real remote
   await sleep(4000);
   const after = JSON.parse(await P());
   log('seek', { before, after: after.pos, dur: after.dur });

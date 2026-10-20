@@ -21,12 +21,15 @@ CSS variable (`--acc` in `src/style.css`, Cinema red `#e50914` today).
   so the next launch paints the first row at once and refreshes in the background.
 - **My List** — Jellyfin favourites as a grid. **Search** — 6-column letter grid, results update while typing
   (movies and shows first, then episodes).
-- **More Info** — backdrop, year · rating · runtime · score, overview, genres/cast, minutes left,
-  Play/Resume (+ Start Over), My List toggle, seasons + episodes (thumbnails, progress, watched tick)
-  for series, More Like This. Admins get **Fix Audio** and **Fetch Subtitle** (same mediafix-helper
-  calls and messages as JellyfinNX) and an **Audio fixed** line: green tick when fixed, live progress
-  bar while a fix runs (even if started elsewhere), red note if the last fix failed. Cards of fixed
-  movies/episodes show a small green tick (checked quietly in the background, cached on the TV).
+- **More Info** — kept calm: logo/title, S·E line, one meta line (year · rating · runtime · score), the
+  overview (3 lines), minutes left, and one row of pill buttons: **Resume/Play, Start Over, My List, More**;
+  then seasons + episodes (thumbnails, progress, watched tick; another season starts at its episode 1) and
+  More Like This. A small green **Audio fixed** chip sits next to the meta line (amber "Fixing audio N%" while
+  a fix runs, even one started elsewhere). **More** (three-dots icon) opens a small popup above the button:
+  **Fix Audio** (badge: Audio fixed / Running N% with a bar / Failed) and **Fetch Subtitle** for admins (same
+  mediafix-helper calls and messages as JellyfinNX), and a Details block (genres, cast, director, studio,
+  subtitles, the reason of a failed fix). Back/Left/Right closes it. Cards of fixed movies/episodes show a
+  small green tick (checked quietly in the background, cached on the TV).
 - **Player** (Samsung AVPlay, not the HTML5 video element):
   - direct play of the file (`/Videos/{id}/stream?static=true…`); if the TV can't play it (e.g. TrueHD/DTS
     audio) the server's HLS transcode is played in AVPlay; HTML5 video only as a last fallback/desktop testing;
@@ -71,7 +74,9 @@ details, search, text entry), `player/` (AVPlay/HTML5 engines, device profile, p
 
 ## Testing on the TV
 
-All tests drive the real TV over the Chrome DevTools protocol (no remote needed):
+All tests drive the real TV over the Chrome DevTools protocol (no remote needed). Keys are sent like the real
+Samsung remote sends them: plain keydowns, and a held key is plain keydowns every ~100 ms then one keyup (the
+remote sets no repeat flag; the app's own hold detection is in `src/keys.js` and the player). Shared helpers: `test/lib.mjs`.
 
 ```
 W=$(test/tv-debug.sh)                     # launch with the inspector, prints the websocket
@@ -82,9 +87,15 @@ node test/tv-func-settings.mjs $W <movieId> [<pgsMovieId>]   # quality/zoom/subt
 node test/tv-func-seekhold.mjs $W <movieId>                  # hold Right / FF for seconds
 node test/tv-func-next.mjs $W <episodeId>                    # next-episode countdown + autoplay
 node test/tv-func-episodes.mjs $W <episodeId>                # Episodes panel: open, moves, seasons, Back, switch episode
+node test/tv-func-qa.mjs $W [launch,billboard,rows,details,search]   # 83 PASS/FAIL checks: screens, billboard, rows, details + More menu, search
+node test/tv-func-avstress.mjs $W [rounds] [ids]             # fast subtitle/audio changes, also during restarts, on 4 tricky files
+node test/tv-func-taps.mjs $W <movieId>                      # 10 s taps (Left/Right/FF/RW), pause/play keys, Back focus, Continue Watching
 node test/desktop-shots.mjs /tmp/shots 'wait:3000;keys:Down;shot:home'   # screenshots in desktop Chromium
 ```
 `tv-trace.mjs`, `tv-layers.mjs`, `css-exp.mjs`, `bg-exp.sh` are the profiling tools used to find the slow parts.
+Test data: `python3 tools/testdata.py snapall /tmp/before.json` before a round and `restore /tmp/before.json` after
+puts back resume points, watched and My List (and the Continue Watching order); `diff` shows what a round changed.
+Fix Audio / Fetch Subtitle are never run by the tests: `tv-func-qa` wraps the page's fetch so the helper call is only recorded.
 Test hooks in the page: `__jfReset()`, `__jfOpen(id)`, `__jfPlayer()`, `__jfSeek(ms)`, `__jf.marks`.
 
 ### Results on the TV (20 Oct 2026, two runs each)
@@ -107,6 +118,13 @@ Test hooks in the page: `__jfReset()`, `__jfOpen(id)`, `__jfPlayer()`, `__jfSeek
 Long tasks still seen: the TV player's own `seekTo` (~0.3 s) and shutting the player down after Back
 (0.2–0.3 s) — both run after the screen has already changed.
 
+Re-measured in the final QA round (20 Oct, after the More menu, held-key and player fixes; plain key presses):
+launch (page reload) → first row 163–264 ms, cold app start: JS start → first row 103–178 ms; row presses 16–24 ms avg,
+0 long tasks; rows up/down 36–39 ms avg; holding Right 2 s = 21 moves for 21 presses, 0 long tasks; More Info open
+56–71 ms (series 56–97 ms); More menu open 37 ms; Play → first frame 0.11–0.19 s warm / 1.27 s cold (Play key on a
+card); seek press → bar 13–29 ms avg, video again 0.78–0.88 s; Back from player / details 36–39 ms / 40–45 ms;
+Audio & Subtitles menu 18 ms; Episodes panel open 71–101 ms, switch episode → first frame 1.45 s.
+
 ## Known limits
 
 - Playback speed: Samsung AVPlay's `setSpeed` is only fast-forward trick play (no sound), so speed choices are
@@ -115,6 +133,10 @@ Long tasks still seen: the TV player's own `seekTo` (~0.3 s) and shutting the pl
   never shows. Trickplay previews show once the server has made the pictures: trickplay is **on for all 4
   libraries** and generated by the "Generate Trickplay Images" scheduled task (`tools/trickplay.py` turns it on
   and starts the task; it reads the login from `~/.secrets` at run time).
+- Seeking lands on the file's nearest keyframe (AVPlay), so a 10 s tap can end a few seconds off; the bar itself always
+  moves exactly 10 s per tap.
+- Audio tracks the TV cannot decode (TrueHD, DTS) are left out of AVPlay's track list; picking one plays through the
+  server (audio converted). Picking a playable track then goes back to direct play.
 - Picture subtitles (PGS/VobSub) are burned in by the server (a transcode); text subtitles are drawn by the app.
 - The first time an external/extracted subtitle is used the server may need time to extract it; embedded text
   subtitles are read by AVPlay directly.

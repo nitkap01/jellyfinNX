@@ -4,7 +4,7 @@
 //  launch      page reload -> first row in DOM / first row posters loaded (ms since navigation start)
 //  rowRight    20 presses Right inside a long row        rowLeft   20 presses Left back
 //  vertical    20 presses Down/Up across rows (10 + 10)
-//  holdRight   holding Right for 2 s (auto-repeat every 50 ms): long tasks, moves done vs repeats sent
+//  holdRight   holding Right for 2 s (plain keydowns every 100 ms, like the real remote): long tasks, moves done vs repeats sent
 //  details     OK on a movie -> overlay drawn (ms);  backDetails  Back -> Home drawn (ms)
 //  play        Play -> first video frame (AVPlay first time update);  seek  5 presses Right in the player:
 //              bar update per press (ms) and time until the video plays again;  ffrw  FF/RW keys;  backPlayer
@@ -62,7 +62,7 @@ sock.onopen = async () => {
     const idx0 = await ev(`__jfApp.screen('home').rows.row.idx`);
     await down('Right');
     let sent = 1;
-    for (let t = 0; t < 2000; t += 50) { await sleep(50); await down('Right', true); sent++; }
+    for (let t = 0; t < 2000; t += 100) { await sleep(100); await down('Right'); sent++; } // plain keydowns like the real remote
     await up('Right');
     await sleep(700);
     const h = await ev(READ);
