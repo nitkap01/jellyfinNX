@@ -45,10 +45,11 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .ri-profiles .ic b { display: flex; align-items: center; justify-content: center; font-size: 24px; background: #2c6fd6; color: #fff; }
 
 /* buttons */
-.btn { display: inline-flex; align-items: center; height: 72px; padding: 0 38px; margin-right: 18px; border-radius: 8px; font-size: 28px; font-weight: 700; background: rgba(255,255,255,.2); color: var(--txt); white-space: nowrap; vertical-align: top; }
+.btn { display: inline-flex; align-items: center; height: 72px; padding: 0 38px; margin-right: 18px; border-radius: 999px; font-size: 28px; font-weight: 700; background: rgba(255,255,255,.2); color: var(--txt); white-space: nowrap; vertical-align: top; }
 .btn .ic { display: inline-flex; margin-right: 14px; font-size: 30px; }
 .btn.btn-w { background: var(--txt); color: #000; }
-.btn.f { background: var(--txt); color: #000; outline: 5px solid var(--txt); outline-offset: 4px; }
+/* focus ring as a shadow so it follows the rounded shape (Chrome 76 outlines stay square) */
+.btn.f { background: var(--txt); color: #000; box-shadow: 0 0 0 4px var(--tv), 0 0 0 9px var(--txt); }
 
 /* hero */
 .hero { position: absolute; left: 150px; top: 150px; width: 840px; will-change: opacity; }
@@ -60,7 +61,9 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .h-title { font-size: 88px; font-weight: 900; line-height: .95; letter-spacing: -.02em; text-transform: uppercase; max-height: 168px; overflow: hidden; }
 .h-meta { margin-top: 22px; font-size: 26px; color: var(--mut); height: 35px; white-space: nowrap; overflow: hidden; }
 .h-ov { margin-top: 16px; font-size: 26px; line-height: 1.4; color: #dcdce2; height: 109px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.h-btns { margin-top: 30px; }
+.h-btns { margin-top: 30px; display: flex; flex-wrap: nowrap; align-items: center; }
+.h-btns .btn { height: 62px; padding: 0 30px; font-size: 24px; margin-right: 16px; flex: 0 0 auto; }
+.h-btns .btn .ic { margin-right: 12px; font-size: 26px; }
 .browse:not(.top) .h-btns { opacity: 0; }
 
 /* rows */
