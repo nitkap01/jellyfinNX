@@ -1,5 +1,5 @@
 // Home / Shows / Movies / My List: billboard on top, rows of cards below.
-import { el, debounce, mark, fmtRuntime, epLabel, onIdle, setFlag } from '../util.js';
+import { el, debounce, mark, fmtRuntime, epLabel, onIdle, setFlag, progressPct } from '../util.js';
 import { app } from '../app.js';
 import { store } from '../store.js';
 import { S, backdropImg, logoImg, invalidate } from '../api.js';
@@ -27,8 +27,8 @@ export function browseScreen(host, cfg) {
     H.title = el('div', 'h-title', H.logoBox);
     H.meta = el('div', 'h-meta', h);
     H.ov = el('div', 'h-ov', h);
-    const b = el('div', 'h-btns', h);
-    H.btns = [mkBtn(b, ICON.play, 'Play', 'btn-w'), mkBtn(b, ICON.info, 'More Info')];
+    H.box = el('div', 'h-btns', h);
+    H.btns = []; H.acts = []; H.sig = '';
   } else if (cfg.title) el('div', 'scr-title', root, cfg.title);
   const rowsHost = el('div', 'rows-host', root);
 
@@ -76,7 +76,34 @@ export function browseScreen(host, cfg) {
     H.ov.textContent = it.Overview || '';
   }
 
-  function paintHeroBtns() { H.btns.forEach((b, j) => b.classList.toggle('f', mode === 'top' && j === heroIdx && app.isTop(api))); }
+  // Billboard buttons follow the featured title: half-watched → Resume (time left) + Start Over + More Info, else Play + More Info.
+  function heroButtons(it) {
+    const p = it && it.Type !== 'Series' ? progressPct(it) : 0;
+    if (p > 0 && p < 99) {
+      const left = it.RunTimeTicks ? Math.max(1, Math.round((it.RunTimeTicks - ((it.UserData && it.UserData.PlaybackPositionTicks) || 0)) / 6e8)) : 0;
+      return [['resume', ICON.play, 'Resume' + (left ? ' · ' + (left >= 60 ? Math.floor(left / 60) + 'h ' + (left % 60) + 'm' : left + 'm') + ' left' : ''), 'btn-w'],
+        ['restart', ICON.restart, 'Start Over'], ['info', ICON.info, 'More Info']];
+    }
+    return [['play', ICON.play, 'Play', 'btn-w'], ['info', ICON.info, 'More Info']];
+  }
+  function setHeroBtns(it) {
+    const list = heroButtons(it);
+    const sig = list.map((x) => x[2]).join('|');
+    if (sig === H.sig) return;
+    H.sig = sig; H.box.textContent = ''; H.acts = list.map((x) => x[0]);
+    H.btns = list.map((x) => mkBtn(H.box, x[1], x[2], x[3]));
+    if (heroIdx >= H.btns.length) heroIdx = H.btns.length - 1;
+  }
+  function heroAct() {
+    const a = H.acts[heroIdx];
+    if (!featured) return;
+    if (a === 'info') openDetails(featured);
+    else playItem(featured, a === 'restart' ? { restart: true } : {});
+  }
+  function paintHeroBtns() {
+    if (featured) setHeroBtns(featured);
+    H.btns.forEach((b, j) => b.classList.toggle('f', mode === 'top' && j === heroIdx && app.isTop(api)));
+  }
 
   function toTop() {
     if (!cfg.hero) return;
@@ -248,9 +275,9 @@ export function browseScreen(host, cfg) {
     key(k, e) {
       if (mode === 'top' && cfg.hero) {
         if (k === 'left') { if (heroIdx > 0) { heroIdx--; paintHeroBtns(); } else { H.btns.forEach((b) => b.classList.remove('f')); openRail(cfg.name); } return true; }
-        if (k === 'right') { if (heroIdx < 1) { heroIdx++; paintHeroBtns(); } return true; }
+        if (k === 'right') { if (heroIdx < H.btns.length - 1) { heroIdx++; paintHeroBtns(); } return true; }
         if (k === 'down') { toRows(); return true; }
-        if (k === 'ok') { if (featured) (heroIdx === 0 ? playItem(featured) : openDetails(featured)); return true; }
+        if (k === 'ok') { heroAct(); return true; }
         if (k === 'back') { if (cfg.name === 'home') { cfg.exitPrompt(); return true; } return false; }
         if (k === 'up') return true;
         return false;
