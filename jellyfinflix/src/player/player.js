@@ -489,18 +489,31 @@ function selectAudio(my, index, quiet) {
   if (!s) { warn('audio change: stream not found', index); return; }
   if (!quiet && index === my.audio) { log('audio change: already on this track', index); return; }
   log('audio change', { from: my.audio, to: index, codec: s.Codec, ch: s.Channels, lang: s.Language, method: my.method, quiet: !!quiet });
+  // While the stream is (re)opening the TV player is not ready for track calls: remember the choice instead.
+  // Direct play applies it as soon as playback begins (beginPlayback); a restart through the server is queued.
+  if (!my.started) {
+    my.audio = index;
+    if (my.reloading && my.forceTranscode) reload(my, { audio: index }); else log('audio change: applied when playback starts');
+    return;
+  }
   const auds = audioList(my).filter((x) => !x.IsExternal);
   const nth = auds.indexOf(s);
   const ok = AUDIO_OK.indexOf((s.Codec || '').toLowerCase()) >= 0;
   if (my.method === 'DirectPlay' && ok && nth >= 0 && eng.name === 'avplay') {
     const tr = eng.tracks().filter((t) => t.type === 'AUDIO');
-    if (!tr[nth]) warn('audio change: TV track list has no entry', { nth, tracks: tr.length });
-    if (tr[nth] && eng.select('AUDIO', tr[nth].index)) { log('audio change: switched on the TV', tr[nth].index); my.audio = index; if (!quiet) toast('Audio: ' + streamLabel(s), 2000); report(my, 'progress', 'AudioTrackChange'); return; }
+    // The TV leaves out tracks it cannot decode (e.g. TrueHD), so the n-th file track is the n-th playable one then.
+    const playable = auds.filter((x) => AUDIO_OK.indexOf((x.Codec || '').toLowerCase()) >= 0);
+    const k = tr.length === auds.length ? nth : tr.length === playable.length ? playable.indexOf(s) : nth;
+    if (!tr[k]) warn('audio change: TV track list has no entry', { nth, k, tracks: tr.length, inFile: auds.length });
+    if (tr[k] && eng.select('AUDIO', tr[k].index)) { log('audio change: switched on the TV', tr[k].index); my.audio = index; if (!quiet) toast('Audio: ' + streamLabel(s), 2000); report(my, 'progress', 'AudioTrackChange'); return; }
   }
-  // Needs the server: restart from here with that audio track (transcoded audio).
-  log('audio change: restarting through the server', { codecOk: ok, nth });
+  // Needs the server: restart from here with that audio track converted by the server. Restarting in direct play
+  // again would give the same file the TV could not switch in (that looped forever). From a server conversion, a track
+  // the TV can play is tried in direct play again; if the TV still cannot switch to it, it goes back to the server once.
+  my.audioTx = my.method === 'DirectPlay' || !ok;
+  log('audio change: restarting through the server', { codecOk: ok, nth, transcode: my.audioTx });
   my.audio = index;
-  reload(my, { audio: index });
+  reload(my, { audio: index, noDirect: my.audioTx });
 }
 
 async function reload(my, o) {
@@ -513,7 +526,7 @@ async function reload(my, o) {
   U.spin.classList.add('on');
   try {
     clearInterval(my.progressT);
-    const opts = Object.assign({ startTicks: pos * TICKS, sub: my.sub, audio: my.audio, maxBitrate: my.maxBitrate, burn: my.burn }, o);
+    const opts = Object.assign({ startTicks: pos * TICKS, sub: my.sub, audio: my.audio, maxBitrate: my.maxBitrate, burn: my.burn, noDirect: my.audioTx }, o);
     my.forceTranscode = !!(opts.maxBitrate || opts.burn || opts.noDirect);
     opts.noDirect = my.forceTranscode;
     const info = await playbackInfo(my.item, opts);
@@ -534,7 +547,7 @@ async function selectSub(my, index, quiet) {
   log('subtitle change', { from: my.sub, to: index, quiet: !!quiet, method: my.method });
   my.cues = null; my.cueIdx = 0; U.subs.textContent = '';
   if (index < 0) {
-    my.sub = -1; eng.silentSubs(true); if (!quiet) toast('Subtitles off', 1500); report(my, 'progress', 'SubtitleTrackChange');
+    my.sub = -1; my.subWanted = -1; eng.silentSubs(true); if (!quiet) toast('Subtitles off', 1500); report(my, 'progress', 'SubtitleTrackChange');
     if (my.burn) { my.burn = false; reload(my, { sub: -1, burn: false }); }
     return;
   }
@@ -550,6 +563,7 @@ async function selectSub(my, index, quiet) {
   }
   if (my.burn) { my.burn = false; my.sub = index; reload(my, { sub: index, burn: false }); return; }
   my.sub = index;
+  if (!my.started) { my.subWanted = index; log('subtitle change: applied when playback starts'); return; }
   report(my, 'progress', 'SubtitleTrackChange');
   // Embedded text track during direct play: let AVPlay decode it (no server work).
   if (!s.IsExternal && my.method === 'DirectPlay' && eng.name === 'avplay') {
