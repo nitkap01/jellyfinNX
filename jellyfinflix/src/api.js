@@ -1,6 +1,7 @@
 // Jellyfin API: tiny fetch wrapper with an in-memory cache and image URL helpers.
 // GETs carry the token as api_key in the query, so they are "simple" requests (no CORS preflight).
 import { store } from './store.js';
+import { warn } from './log.js';
 
 export const VERSION = '0.1.0';
 export const S = { server: '', userId: '', token: '', name: '', admin: false, img: '' };
@@ -43,8 +44,8 @@ export function get(path, params, ttl) {
   const c = mem.get(u);
   if (c && Date.now() - c.t < (ttl == null ? 120000 : ttl)) return c.p;
   const p = fetch(u).then((r) => {
-    if (r.status === 401) { onAuthLost(); throw new Error('Signed out'); }
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (r.status === 401) { warn('api 401 (signed out)', path); onAuthLost(); throw new Error('Signed out'); }
+    if (!r.ok) { warn('api GET failed', { path, status: r.status }); throw new Error('HTTP ' + r.status); }
     return r.json();
   });
   mem.set(u, { t: Date.now(), p });
@@ -63,8 +64,8 @@ export async function send(method, path, body, params) {
     headers: { 'Content-Type': 'application/json', 'X-Emby-Authorization': authHeader(S.token) },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (r.status === 401) { onAuthLost(); throw new Error('Signed out'); }
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+  if (r.status === 401) { warn('api 401 (signed out)', path); onAuthLost(); throw new Error('Signed out'); }
+  if (!r.ok) { warn('api ' + method + ' failed', { path, status: r.status }); throw new Error('HTTP ' + r.status); }
   const t = await r.text();
   return t ? JSON.parse(t) : null;
 }

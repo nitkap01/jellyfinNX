@@ -115,3 +115,9 @@ Long tasks still seen: the TV player's own `seekTo` (~0.3 s) and shutting the pl
 - Libraries considered: spatial-navigation libraries (@bbc/tv-lrud-spatial, js-spatial-navigation, norigin) — not
   used, our own row/column focus code is simpler and never reads layout on a key press; Shaka Player — not
   needed, AVPlay plays HLS itself. Phase 2 idea if the DOM ever becomes the limit: LightningJS/Blits (WebGL).
+
+## Logs (detailed until 27 Oct 2026, errors only after that)
+- `src/log.js` keeps a log on the TV (survives crashes) and uploads it to the Jellyfin server (Dashboard → Logs, files `upload_JellyfinFlix_*`): at start, every 5 min, a few seconds after any error, when the app is hidden and on exit.
+- Logged: app start/exit, screens, play/open source (method, container, codecs, direct or HLS), AVPlay events/errors/buffering, audio/subtitle/quality changes and how they were applied, restarts (queued so two never run at once) with timings, playback failures, API errors, JS errors and unhandled promises. Passwords/tokens are masked.
+- A launch after a crash adds "previous session ended unexpectedly" with that session's last steps.
+- Read on INDIE: `python3 tools/getlogs.py` (list), `python3 tools/getlogs.py last 3` (print newest 3). The detail period ends at `FULL_UNTIL` in `src/log.js`.

@@ -1,4 +1,5 @@
 // Playback engines with one small interface: Samsung AVPlay (primary) and HTML5 <video> (fallback / desktop testing).
+import { log, warn, error } from '../log.js';
 let webapisPromise = null;
 
 // webapis.js is only needed for playback; load it after the UI is up so launch stays fast.
@@ -33,6 +34,7 @@ export function avplayEngine(host) {
       cb = callbacks;
       try { av.stop(); } catch (e) { /* idle */ }
       try { av.close(); } catch (e) { /* idle */ }
+      log('avplay open', { hls: url.indexOf('.m3u8') > 0 });
       av.open(url);
       av.setDisplayRect(0, 0, 1920, 1080);
       // Start as soon as ~1 s is buffered (default is more), both at start and after a seek.
@@ -42,17 +44,17 @@ export function avplayEngine(host) {
       } catch (e) { /* not supported on this firmware */ }
       try { av.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX'); } catch (e) { /* older firmware */ }
       av.setListener({
-        onbufferingstart: () => cb.onBuffering && cb.onBuffering(true),
+        onbufferingstart: () => { log('avplay buffering'); if (cb.onBuffering) cb.onBuffering(true); },
         onbufferingprogress: () => {},
         onbufferingcomplete: () => { if (window.__jf) window.__jf.marks.bufDone = Math.round(performance.now()); if (cb.onBuffering) cb.onBuffering(false); },
         oncurrentplaytime: (ms) => cb.onTime && cb.onTime(ms),
-        onstreamcompleted: () => cb.onEnd && cb.onEnd(),
-        onerror: (e) => cb.onError && cb.onError(String(e)),
-        onevent: () => {},
+        onstreamcompleted: () => { log('avplay stream completed'); if (cb.onEnd) cb.onEnd(); },
+        onerror: (e) => { error('avplay onerror', String(e)); if (cb.onError) cb.onError(String(e)); },
+        onevent: (type, data) => log('avplay event', { type, data }),
         onsubtitlechange: (dur, text) => cb.onSubtitle && cb.onSubtitle(text, dur),
         ondrmevent: () => {},
       });
-      return new Promise((res, rej) => av.prepareAsync(res, (e) => rej(new Error('AVPlay could not open the stream (' + (e && e.name || e) + ')'))));
+      return new Promise((res, rej) => av.prepareAsync(res, (e) => { error('avplay prepare failed', (e && e.name) || String(e)); rej(new Error('AVPlay could not open the stream (' + (e && e.name || e) + ')')); }));
     },
     play() { try { av.play(); } catch (e) { /* state */ } },
     pause() { try { av.pause(); } catch (e) { /* state */ } },
@@ -61,7 +63,7 @@ export function avplayEngine(host) {
     duration() { try { return av.getDuration(); } catch (e) { return 0; } },
     paused() { try { return av.getState() === 'PAUSED'; } catch (e) { return false; } },
     tracks() { try { return av.getTotalTrackInfo() || []; } catch (e) { return []; } },
-    select(type, index) { try { av.setSelectTrack(type, index); return true; } catch (e) { return false; } },
+    select(type, index) { try { av.setSelectTrack(type, index); return true; } catch (e) { warn('avplay setSelectTrack failed', { type, index, e: (e && e.name) || String(e), state: (() => { try { return av.getState(); } catch (x) { return '?'; } })() }); return false; } },
     silentSubs(on) { try { av.setSilentSubtitle(on); } catch (e) { /* none */ } },
     zoom(mode) { try { av.setDisplayMethod(mode); return true; } catch (e) { return false; } },
     speed(x) { try { av.setSpeed(x); return true; } catch (e) { return false; } },

@@ -2,7 +2,7 @@
 import { mark } from './util.js';
 import { app } from './app.js';
 import { store } from './store.js';
-import { S, useLogin, get, setAuthLost, slim } from './api.js';
+import { S, useLogin, get, setAuthLost, slim, VERSION, authHeader } from './api.js';
 import { registerTvKeys } from './keys.js';
 import { initBg } from './ui/bg.js';
 import { initRail, railUser } from './ui/rail.js';
@@ -15,8 +15,15 @@ import { profilesScreen } from './screens/profiles.js';
 import { browseScreen } from './screens/browse.js';
 import { searchScreen } from './screens/search.js';
 import { homeDefs, moviesDefs, showsDefs, myListDefs } from './data.js';
+import { initLog, log, upload } from './log.js';
 
 mark('jsStart');
+const L = initLog({ version: VERSION });
+const logUploader = () => S.token && L.setUploader({
+  device: store.deviceId,
+  post: (text) => fetch(S.server + '/ClientLog/Document', { method: 'POST', headers: { 'Content-Type': 'text/plain', 'X-Emby-Authorization': authHeader(S.token) }, body: text })
+    .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); }),
+});
 const $ = (id) => document.getElementById(id);
 const screensHost = $('screens');
 initBg($('bgh'));
@@ -33,13 +40,15 @@ app.register('shows', () => browseScreen(screensHost, { name: 'shows', hero: tru
 app.register('movies', () => browseScreen(screensHost, { name: 'movies', hero: true, defs: moviesDefs, exitPrompt }));
 app.register('mylist', () => browseScreen(screensHost, { name: 'mylist', title: 'My List', defs: myListDefs, exitPrompt }));
 app.register('search', () => searchScreen(screensHost));
-app.on('screen', (n) => { document.body.setAttribute('data-screen', n); });
+app.on('screen', (n) => { document.body.setAttribute('data-screen', n); L.screen(n); });
 
 async function signIn(login) {
   store.remember(login);
   useLogin(login);
   for (const n of USER_SCREENS) app.drop(n);
   railUser();
+  log('signed in', { user: login.Name, admin: !!login.admin });
+  logUploader();
   app.go('home');
 }
 
@@ -50,7 +59,9 @@ function exitPrompt() {
   dialog({ title: 'Exit JellyfinFlix?', buttons: [{ label: 'Exit', value: 1 }, { label: 'Cancel', value: 0 }], focus: 1 }).then((v) => {
     exiting = false;
     if (!v) return;
-    try { window.tizen.application.getCurrentApplication().exit(); } catch (e) { window.close(); }
+    L.cleanExit();
+    const quit = () => { try { window.tizen.application.getCurrentApplication().exit(); } catch (e) { window.close(); } };
+    Promise.race([upload(), new Promise((r) => setTimeout(r, 1500))]).then(quit, quit);
   });
 }
 
@@ -68,6 +79,7 @@ setAuthLost(() => {
 const last = store.last && store.logins[store.last];
 if (last) {
   useLogin(last);
+  logUploader();
   railUser();
   app.go('home');
   setTimeout(() => get('/Users/Me', {}, 0).then((u) => {

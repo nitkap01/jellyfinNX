@@ -5,6 +5,7 @@ import { S, send } from './api.js';
 import { dialog, alertBox, toast } from './ui/dialog.js';
 import { store } from './store.js';
 import { metrics } from './util.js';
+import { log } from './log.js';
 
 export const HELPER_URL = 'http://192.168.0.154:8099';
 const POLL = { 'fix-subtitle': 2000, 'fix-audio': 10000 };
@@ -68,6 +69,7 @@ function refreshItem(id) {
 }
 
 export async function runMediaFix(action, item) {
+  log('mediafix start', { action, item: item && item.Name });
   const path = item.Path;
   if (!canMediaFix(item)) { alertBox('This file is not under /MEDIA/, so it cannot be fixed from here.'); return; }
   if (action === 'fix-audio') {

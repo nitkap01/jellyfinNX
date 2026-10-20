@@ -9,6 +9,7 @@ import { toast, alertBox } from '../ui/dialog.js';
 import { deviceProfile, AUDIO_OK } from './profile.js';
 import { loadWebapis, avplayEngine, html5Engine } from './engines.js';
 import { runMediaFix, canMediaFix, fetchFixStatus } from '../mediafix.js';
+import { log, warn, error } from '../log.js';
 
 const TICKS = 10000; // ticks per ms
 const UI_HIDE_MS = 3500;
@@ -63,7 +64,8 @@ export async function playItem(item, opts) {
       if (!ep) { toast('No episodes to play'); return; }
       item = slim(ep);
     }
-  } catch (e) { toast('Could not start: ' + e.message); return; }
+  } catch (e) { error('play: could not start', e.message); toast('Could not start: ' + e.message); return; }
+  log('play', { name: item.Name, id: item.Id, type: item.Type, resume: !!(opts && opts.resume) });
   start(item, opts);
 }
 
@@ -236,13 +238,15 @@ async function prepareSource(my, info, startMs, alive) {
   if (my.audio == null) my.audio = ms.DefaultAudioStreamIndex != null ? ms.DefaultAudioStreamIndex : (my.streams.find((s) => s.Type === 'Audio') || {}).Index;
   if (my.subWanted === undefined) my.subWanted = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : -1;
   const url = pickUrl(my, ms);
+  log('open source', { method: my.method, container: ms.Container, size: ms.Size, video: (my.streams.find((s) => s.Type === 'Video') || {}).Codec,
+    audio: my.audio, sub: my.subWanted, start: startMs, hls: url.indexOf('.m3u8') > 0, reasons: ms.TranscodeReasons });
   const step = (n) => { if (my.steps) my.steps[n] = Math.round(performance.now() - my.t0); };
   my.prepared = false;
   await eng.open(url, {
     onTime: (ms2) => onTime(my, ms2),
     onBuffering: (b) => { if (my === st) U.spin.classList.toggle('on', b && my.started); },
     onEnd: () => { if (my === st) ended(my); },
-    onError: (m) => { if (my === st) fail(my, new Error(m)); else my.prepared = false; },
+    onError: (m) => { error('player error', { m, method: my.method, pos: my.pos, active: my === st }); if (my === st) fail(my, new Error(m)); else my.prepared = false; },
     onSubtitle: (text, dur) => {
       metrics.subEvents = (metrics.subEvents || 0) + 1;
       if (my !== st || my.cues || my.sub < 0) return;
@@ -271,6 +275,7 @@ function beginPlayback(my, startMs) {
   if (my.method === 'DirectPlay' && auds.length > 1 && auds[0].Index !== my.audio) selectAudio(my, my.audio, true);
   if (my.subWanted >= 0) selectSub(my, my.subWanted, true);
   report(my, 'start');
+  log('playing', { engine: eng.name, method: my.method, audio: my.audio, sub: my.subWanted, steps: my.steps });
   clearInterval(my.progressT);
   my.progressT = setInterval(() => report(my, 'progress'), 10000);
   applyPlayerPrefs(my);
@@ -431,6 +436,7 @@ function playNext(my) {
   start(n, { restart: !(n.UserData && n.UserData.PlaybackPositionTicks) });
 }
 function ended(my) {
+  log('playback ended', { item: my.item && my.item.Name });
   if (my.repeat) { my.target = 0; commitSeek(my); eng.play(); return; }
   if (my.nextEp && !my.dismissedNext && store.prefs.autoplay !== false) playNext(my); else close();
 }
@@ -458,21 +464,30 @@ function streamLabel(s) {
 
 function selectAudio(my, index, quiet) {
   const s = my.streams.find((x) => x.Index === index);
-  if (!s) return;
+  if (!s) { warn('audio change: stream not found', index); return; }
+  if (!quiet && index === my.audio) { log('audio change: already on this track', index); return; }
+  log('audio change', { from: my.audio, to: index, codec: s.Codec, ch: s.Channels, lang: s.Language, method: my.method, quiet: !!quiet });
   const auds = audioList(my).filter((x) => !x.IsExternal);
   const nth = auds.indexOf(s);
   const ok = AUDIO_OK.indexOf((s.Codec || '').toLowerCase()) >= 0;
   if (my.method === 'DirectPlay' && ok && nth >= 0 && eng.name === 'avplay') {
     const tr = eng.tracks().filter((t) => t.type === 'AUDIO');
-    if (tr[nth] && eng.select('AUDIO', tr[nth].index)) { my.audio = index; if (!quiet) toast('Audio: ' + streamLabel(s), 2000); report(my, 'progress', 'AudioTrackChange'); return; }
+    if (!tr[nth]) warn('audio change: TV track list has no entry', { nth, tracks: tr.length });
+    if (tr[nth] && eng.select('AUDIO', tr[nth].index)) { log('audio change: switched on the TV', tr[nth].index); my.audio = index; if (!quiet) toast('Audio: ' + streamLabel(s), 2000); report(my, 'progress', 'AudioTrackChange'); return; }
   }
   // Needs the server: restart from here with that audio track (transcoded audio).
+  log('audio change: restarting through the server', { codecOk: ok, nth });
   my.audio = index;
   reload(my, { audio: index });
 }
 
 async function reload(my, o) {
+  // One restart at a time: a second change while the stream restarts waits and is merged (avoids two AVPlay opens at once).
+  if (my.reloading) { my.pendingReload = Object.assign(my.pendingReload || {}, o); log('reload queued (another restart running)', o); return; }
+  my.reloading = true;
+  const t0 = performance.now();
   const pos = my.pos;
+  log('reload start', Object.assign({ pos }, o));
   U.spin.classList.add('on');
   try {
     clearInterval(my.progressT);
@@ -486,10 +501,15 @@ async function reload(my, o) {
     my.subWanted = my.sub;
     clearInterval(my.progressT);
     await openSource(my, info, pos);
-  } catch (e) { if (my === st) fail(my, e); }
+    log('reload done', { ms: Math.round(performance.now() - t0), method: my.method });
+  } catch (e) { error('reload failed', { m: e && e.message, ms: Math.round(performance.now() - t0) }); if (my === st) fail(my, e); } finally {
+    my.reloading = false;
+    if (my.pendingReload && my === st) { const p = my.pendingReload; my.pendingReload = null; reload(my, p); }
+  }
 }
 
 async function selectSub(my, index, quiet) {
+  log('subtitle change', { from: my.sub, to: index, quiet: !!quiet, method: my.method });
   my.cues = null; my.cueIdx = 0; U.subs.textContent = '';
   if (index < 0) {
     my.sub = -1; eng.silentSubs(true); if (!quiet) toast('Subtitles off', 1500); report(my, 'progress', 'SubtitleTrackChange');
@@ -654,6 +674,7 @@ function setSpeed(my, x) {
 }
 function setQuality(my, q) {
   if ((my.maxBitrate || 0) === q.bps) return;
+  log('quality change', { from: my.maxBitrate || 'original', to: q.label });
   my.maxBitrate = q.bps || 0;
   my.quality = q.bps ? q.label : '';
   toast('Quality: ' + q.label, 2000);
@@ -753,6 +774,7 @@ async function stopPlayback(switching) {
 }
 
 async function fail(my, e) {
+  error('playback failed', { m: e && e.message, method: my.method, retried: !!my.retried, pos: my.pos, item: my.item && my.item.Name });
   // Direct play failed on the TV: try once more through the server (transcode).
   if (!my.retried && my.method === 'DirectPlay') {
     my.retried = true; my.forceTranscode = true;
@@ -771,6 +793,7 @@ async function fail(my, e) {
 
 function close() {
   const was = st;
+  if (was) log('player close', { item: was.item && was.item.Name, pos: was.pos, dur: was.dur, method: was.method });
   // Hide first so Back feels instant; stop the TV player right after the screen has switched.
   document.body.classList.remove('playing');
   if (app.isTop(layer)) app.pop(layer);
