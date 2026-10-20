@@ -56,6 +56,8 @@ export function searchScreen(host) {
   let loaded = false;
   return {
     el: root,
+    rows, // read by the TV tests (result order)
+    get query() { return qt.textContent; },
     show() { root.classList.add('on'); setBg(''); if (!loaded) { loaded = true; loadDefault(); } this.resume(); },
     hide() { root.classList.remove('on'); },
     resume() { if (focus === 'kb') kb.focus(); else rows.focus(); },

@@ -59,10 +59,11 @@ export function myListDefs() {
   return [{ id: 'favs', title: 'My List', order: 10, dynamic: true, grid: true, load: () => get('/Users/{U}/Items', P({ Filters: 'IsFavorite', Recursive: true, IncludeItemTypes: 'Movie,Series,Episode', SortBy: 'SortName', Limit: 200 }), 0).then(items) }];
 }
 
+// Movies and shows first, then episodes. Two parallel queries: with one mixed query a common word ("the") fills
+// the limit with episodes and the movies never arrive.
 export function search(term) {
-  const rank = (it) => (it.Type === 'Episode' ? 1 : 0);
-  return get('/Users/{U}/Items', P({ SearchTerm: term, Recursive: true, IncludeItemTypes: 'Movie,Series,Episode', Limit: 40 }), 300000)
-    .then(items).then((list) => list.map((it, i) => [it, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]));
+  const q = (types, limit) => get('/Users/{U}/Items', P({ SearchTerm: term, Recursive: true, IncludeItemTypes: types, Limit: limit }), 300000).then(items);
+  return Promise.all([q('Movie,Series', 28), q('Episode', 20).catch(() => [])]).then(([titles, eps]) => titles.concat(eps));
 }
 
 export const nextUpFor = (seriesId) => get('/Shows/NextUp', P({ UserId: '{U}', SeriesId: seriesId, Limit: 1, EnableResumable: true }), 0).then(items);
