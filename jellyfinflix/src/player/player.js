@@ -6,7 +6,8 @@ import { S, get, send, COMMON, slim, cardImg } from '../api.js';
 import { store } from '../store.js';
 import { ICON } from '../icons.js';
 import { toast, alertBox } from '../ui/dialog.js';
-import { deviceProfile, AUDIO_OK } from './profile.js';
+import { AUDIO_OK } from './profile.js';
+import { playbackInfoBody, summarizeRequest, summarizeResponse, checkAnswer, urlParams } from './pinfo.js';
 import { loadWebapis, avplayEngine, html5Engine } from './engines.js';
 import { runMediaFix, canMediaFix, fetchFixStatus } from '../mediafix.js';
 import { log, warn, error } from '../log.js';
@@ -37,23 +38,21 @@ export function initPlayer(h) {
 const held = { code: 0, down: false, on: false, last: 0, ups: 0, sawRepeat: false };
 
 function playbackInfo(item, o) {
-  o = o || {};
-  const body = {
-    UserId: S.userId, DeviceProfile: deviceProfile({ maxBitrate: o.maxBitrate, burnIn: o.burn }), MaxStreamingBitrate: o.maxBitrate || 120000000, StartTimeTicks: o.startTicks || 0,
-    IsPlayback: true, AutoOpenLiveStream: true, EnableDirectPlay: !o.noDirect, EnableDirectStream: !o.noDirect, EnableTranscoding: true,
-    AllowVideoStreamCopy: true, AllowAudioStreamCopy: true,
-  };
-  if (o.audio != null) body.AudioStreamIndex = o.audio;
-  if (o.sub != null) body.SubtitleStreamIndex = o.sub;
-  if (o.mediaSourceId) body.MediaSourceId = o.mediaSourceId;
-  return send('POST', '/Items/' + item.Id + '/PlaybackInfo', body, { UserId: S.userId });
+  const body = playbackInfoBody(S.userId, o);
+  const req = summarizeRequest(body);
+  return send('POST', '/Items/' + item.Id + '/PlaybackInfo', body, { UserId: S.userId }).then((info) => {
+    log('playbackinfo', { why: (o && o.why) || 'play', req, res: summarizeResponse(info) });
+    const issues = checkAnswer(body, info);
+    if (issues.length) warn('playbackinfo: server answer differs from the request', issues);
+    return info;
+  });
 }
 
 export function prefetchPlayback(item) {
   if (!item || !item.Id || item.Type === 'Series') return;
   const c = pre.get(item.Id);
   if (c && Date.now() - c.t < 60000) return;
-  const p = playbackInfo(item);
+  const p = playbackInfo(item, { why: 'prefetch' });
   p.catch(() => pre.delete(item.Id));
   pre.set(item.Id, { t: Date.now(), p });
   loadWebapis();
@@ -152,7 +151,7 @@ export function warmUp(item) {
   const w = warm = { item, startMs, my };
   w.promise = (async () => {
     if (!(await loadWebapis()) || warm !== w) return false;
-    const info = await (takePrefetched(item) || playbackInfo(item, { startTicks: startMs * TICKS }));
+    const info = await (takePrefetched(item) || playbackInfo(item, { startTicks: startMs * TICKS, why: 'warm' }));
     if (warm !== w || st) return false;
     if (!eng || eng.name !== 'avplay') eng = avplayEngine(root);
     my.info = info;
@@ -202,7 +201,7 @@ async function start(item, opts) {
     } else {
       if (my !== st) return;
       if (w) { st = null; return start(item, opts); } // warm start failed: do it the normal way
-      const [hasAv, info] = await Promise.all([loadWebapis(), takePrefetched(item) || playbackInfo(item, { startTicks: startMs * TICKS })]);
+      const [hasAv, info] = await Promise.all([loadWebapis(), takePrefetched(item) || playbackInfo(item, { startTicks: startMs * TICKS, why: 'start' })]);
       if (my !== st) return;
       if (!eng || (hasAv && eng.name !== 'avplay')) eng = hasAv ? avplayEngine(root) : html5Engine(root);
       my.info = info;
@@ -258,7 +257,7 @@ async function prepareSource(my, info, startMs, alive) {
   if (my.subWanted === undefined) my.subWanted = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : -1;
   const url = pickUrl(my, ms);
   log('open source', { method: my.method, container: ms.Container, size: ms.Size, video: (my.streams.find((s) => s.Type === 'Video') || {}).Codec,
-    audio: my.audio, sub: my.subWanted, start: startMs, hls: url.indexOf('.m3u8') > 0, reasons: ms.TranscodeReasons });
+    audio: my.audio, sub: my.subWanted, start: startMs, hls: url.indexOf('.m3u8') > 0, playSession: my.info && my.info.PlaySessionId, url: my.method === 'Transcode' ? urlParams(url) : undefined });
   const step = (n) => { if (my.steps) my.steps[n] = Math.round(performance.now() - my.t0); };
   my.prepared = false;
   await eng.open(url, {
@@ -559,7 +558,8 @@ async function reload(my, o) {
   U.spin.classList.add('on');
   try {
     clearInterval(my.progressT);
-    const opts = Object.assign({ startTicks: pos * TICKS, sub: my.sub, audio: my.audio, maxBitrate: my.maxBitrate, burn: my.burn, noDirect: my.audioTx }, o);
+    // mediaSourceId: without it Jellyfin ignores the audio/subtitle choice (see pinfo.js, JTV-11).
+    const opts = Object.assign({ startTicks: pos * TICKS, sub: my.sub, audio: my.audio, maxBitrate: my.maxBitrate, burn: my.burn, noDirect: my.audioTx, mediaSourceId: my.ms && my.ms.Id, why: 'reload' }, o);
     my.forceTranscode = !!(opts.maxBitrate || opts.burn || opts.noDirect);
     opts.noDirect = my.forceTranscode;
     const info = await playbackInfo(my.item, opts);
@@ -849,7 +849,7 @@ async function fail(my, e) {
   if (!my.retried && my.method === 'DirectPlay') {
     my.retried = true; my.forceTranscode = true;
     try {
-      const info = await playbackInfo(my.item, { startTicks: my.pos * TICKS, noDirect: true });
+      const info = await playbackInfo(my.item, { startTicks: my.pos * TICKS, noDirect: true, audio: my.audio, sub: my.sub, burn: my.burn, mediaSourceId: my.ms && my.ms.Id, why: 'retry' });
       if (my !== st) return;
       my.info = info; my.started = false;
       await openSource(my, info, my.pos);

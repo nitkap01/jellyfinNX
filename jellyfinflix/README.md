@@ -91,6 +91,7 @@ node test/tv-func-qa.mjs $W [launch,billboard,rows,details,search]   # 83 PASS/F
 node test/tv-func-avstress.mjs $W [rounds] [ids]             # fast subtitle/audio changes, also during restarts, on 4 tricky files
 node test/tv-func-taps.mjs $W <movieId>                      # 10 s taps (Left/Right/FF/RW), pause/play keys, Back focus, Continue Watching
 node test/desktop-shots.mjs /tmp/shots 'wait:3000;keys:Down;shot:home'   # screenshots in desktop Chromium
+node test/offline-pinfo.mjs [--live <itemId> <subIndex> [audioIndex]]  # no TV: PlaybackInfo body checks; --live asks the server (PlaybackInfo only, no transcode) that a picture subtitle is burned
 ```
 `tv-trace.mjs`, `tv-layers.mjs`, `css-exp.mjs`, `bg-exp.sh` are the profiling tools used to find the slow parts.
 Test data: `python3 tools/testdata.py snapall /tmp/before.json` before a round and `restore /tmp/before.json` after
@@ -147,6 +148,7 @@ Audio & Subtitles menu 18 ms; Episodes panel open 71–101 ms, switch episode �
 
 ## Logs (detailed until 27 Oct 2026, errors only after that)
 - `src/log.js` keeps a log on the TV (survives crashes) and uploads it to the Jellyfin server (Dashboard → Logs, files `upload_JellyfinFlix_*`): at start, every 5 min, a few seconds after any error, when the app is hidden and on exit.
+- Every PlaybackInfo call logs `playbackinfo` (why: prefetch/warm/start/reload/retry; request: burnIn, sub, audio, MediaSourceId sent, direct play/stream, start; answer: PlaySessionId, direct play/stream, TranscodingUrl's SubtitleMethod/SubtitleStreamIndex/AudioStreamIndex/codecs/TranscodeReasons, no token) and a warning when the server did not do what was asked. Jellyfin ignores AudioStreamIndex/SubtitleStreamIndex unless MediaSourceId is sent too (JTV-11).
 - Logged: app start/exit, screens, play/open source (method, container, codecs, direct or HLS), AVPlay events/errors/buffering, audio/subtitle/quality changes and how they were applied, restarts (queued so two never run at once) with timings, playback failures, API errors, JS errors and unhandled promises. Passwords/tokens are masked.
 - A launch after a crash adds "previous session ended unexpectedly" with that session's last steps.
 - Read on INDIE: `python3 tools/getlogs.py` (list), `python3 tools/getlogs.py last 3` (print newest 3). The detail period ends at `FULL_UNTIL` in `src/log.js`.
