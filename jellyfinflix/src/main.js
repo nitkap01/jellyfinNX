@@ -9,7 +9,7 @@ import { initRail, railUser } from './ui/rail.js';
 import { initDialogs, dialog, toast } from './ui/dialog.js';
 import { initTextEntry } from './screens/textentry.js';
 import { initDetails, openDetails } from './screens/details.js';
-import { initPlayer, playerState } from './player/player.js';
+import { initPlayer, playerState, testSeek } from './player/player.js';
 import { loadWebapis } from './player/engines.js';
 import { profilesScreen } from './screens/profiles.js';
 import { browseScreen } from './screens/browse.js';
@@ -83,6 +83,7 @@ mark('shell');
 window.__jfApp = app;
 window.__jfOpen = (id) => get('/Users/{U}/Items/' + id, {}, 0).then((it) => { openDetails(slim(it)); return it.Name; });
 window.__jfPlayer = playerState;
+window.__jfSeek = testSeek;
 window.__jfReset = () => { app.go('home'); const s = app.screen('home'); if (s.reenter) s.reenter(); return app.currentName; };
 requestAnimationFrame(() => setTimeout(() => {
   registerTvKeys();

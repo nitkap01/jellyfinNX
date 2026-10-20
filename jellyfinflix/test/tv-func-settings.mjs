@@ -23,11 +23,14 @@ async function openMenu() {
   lastMenuMs = await ev('__jf.frames[__jf.frames.length-1]');
   return ev(`document.querySelector('.p-menu.on')?1:0`);
 }
-async function pick(cat, opt) {
-  const t0 = Date.now();
+// pick option `opt` (0 = first) of category `cat`; keep = the menu stays open afterwards (style/sync/zoom choices)
+async function pick(cat, opt, keep) {
   if (!(await openMenu())) return 'menu did not open';
-  await keys('Down*' + cat); await keys('Right'); await keys('Up*12', 80); if (opt) await keys('Down*' + opt); await keys('Enter');
-  return Date.now() - t0;
+  await keys('Down*' + cat); await keys('Right'); await keys('Up*12', 120); if (opt) await keys('Down*' + opt); await keys('Enter');
+  await sleep(300);
+  const label = await ev(`(document.querySelector('.pm-i.f')||{}).textContent||''`);
+  if (keep) { await keys('Back*2'); }
+  return label;
 }
 async function waitPlaying(ms = 25000) {
   const t = Date.now(); let p0 = ((await P()) || {}).pos || 0;
@@ -61,23 +64,21 @@ sock.onopen = async () => {
   await pick(4, 0);
   log('original: resumed (ms)', await waitPlaying());
   s = await P(); log('original state', { method: s.method, pos: s.pos });
-  // speed 1.5x (cat 5, opt 4)
-  await pick(5, 4); await sleep(600);
-  log('speed toast', await ev(`(document.querySelector('.toast.on')||{}).textContent||''`));
-  const a = (await P()).pos; await sleep(4000); const b = (await P()).pos;
-  log('speed 1.5x: 4 s wall ->', ((b - a) / 1000).toFixed(1) + ' s video');
+  // speed: AVPlay shows an explanation instead of choices
+  await openMenu(); await keys('Down*5'); await sleep(300);
+  log('speed', await ev(`[...document.querySelectorAll('.pm-i')].map(e=>e.textContent).join(' / ')`));
   await keys('Back'); await sleep(300);
-  await pick(5, 2); await keys('Back'); await sleep(500);
   // zoom fill (cat 6, opt 1) then fit
-  await pick(6, 1); await sleep(500);
+  log('zoom pick', await pick(6, 1, true));
   log('zoom toast/err', await ev(`(document.querySelector('.toast.on')||{}).textContent||'ok'`));
-  await keys('Back'); await pick(6, 0); await keys('Back');
+  await pick(6, 0, true);
   // subtitle style: size large (cat 2, opt 2), sync +0.5 s (cat 3, opt 6)
-  await pick(2, 2); await keys('Back'); await sleep(300);
+  log('size pick', await pick(2, 2, true));
   log('sub class', await ev(`document.querySelector('.p-subs').className`));
-  await pick(3, 6); await keys('Back');
+  log('sync pick', await pick(3, 6, true));
   log('sub delay toast', await ev(`(document.querySelector('.toast.on')||{}).textContent||''`));
-  await pick(2, 1); await keys('Back'); await pick(3, 4); await keys('Back');
+  await pick(2, 1, true); await pick(3, 4, true);
+  log('prefs after test', await ev(`JSON.stringify(JSON.parse(localStorage.getItem('jflix.v1')).prefs)`));
   await press('Back'); await sleep(2500); await press('Back'); await sleep(1500);
   if (pgsId) {
     s = await startItem(pgsId);

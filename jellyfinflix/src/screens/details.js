@@ -8,6 +8,7 @@ import { toast } from '../ui/dialog.js';
 import { nextUpFor } from '../data.js';
 import { playItem, prefetchPlayback, warmUp, coolDown } from '../player/player.js';
 import { runMediaFix, canMediaFix, watchFixStatus } from '../mediafix.js';
+import { ICON } from '../icons.js';
 
 const P = (o) => Object.assign({}, COMMON, o);
 const ROWS_TOP = 590;
@@ -47,7 +48,7 @@ function build() {
 
 const layer = {
   overlay: true,
-  key(k) {
+  key(k, e) {
     if (k === 'back') {
       if (history.length > 1) { history.pop(); render(history[history.length - 1]); return true; }
       close();
@@ -55,7 +56,7 @@ const layer = {
     }
     if (k === 'play' || k === 'playpause') { if (target) playItem(target); return true; }
     if (k === 'left' && rows.row && rows.row.idx === 0) return true;
-    return rows.key(k);
+    return rows.key(k, e);
   },
   show() { root.classList.add('on'); setFlag('dt', true); },
   hide() { root.classList.remove('on'); setFlag('dt', false); open = false; clearTimeout(warmT); coolDown(); if (stopFix) { stopFix(); stopFix = null; } },
@@ -120,7 +121,7 @@ function fillInfo(it, f) {
   if (it.OfficialRating) m.push(it.OfficialRating);
   if (it.Type !== 'Series' && it.RunTimeTicks) m.push(fmtRuntime(it.RunTimeTicks));
   if (it.Type === 'Series' && f && f.ChildCount) m.push(f.ChildCount + (f.ChildCount === 1 ? ' Season' : ' Seasons'));
-  if (it.CommunityRating) m.push('★ ' + it.CommunityRating.toFixed(1));
+  if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
   if (f && f.HasSubtitles) m.push('CC');
   D.meta.textContent = m.join('   ·   ');
   D.ov.textContent = it.Overview || '';
@@ -148,7 +149,7 @@ function showFix(s) {
     el('span', '', D.fix, 'Fixing audio: ' + (s.progressPhase || 'starting') + (pct != null ? ' ' + pct + '%' : ''));
     el('i', '', el('div', 'fixbar', D.fix)).style.transform = 'scaleX(' + (pct || 0) / 100 + ')';
   } else if (s.fixed) {
-    state = 'ok'; D.fix.className = 'd-fix ok'; D.fix.textContent = '✓ Audio fixed';
+    state = 'ok'; D.fix.className = 'd-fix ok'; el('span', 'ic', D.fix).innerHTML = ICON.check; el('span', '', D.fix, 'Audio fixed');
   } else if (s.lastResultStatus && !/^(OK|DRYRUN)/.test(s.lastResultStatus)) {
     state = 'bad'; D.fix.className = 'd-fix bad'; D.fix.textContent = 'Last audio fix failed (' + s.lastResultStatus + ')';
   } else { D.fix.className = 'd-fix'; D.fix.textContent = 'Audio fixed: No'; }
@@ -168,7 +169,7 @@ function buttons() {
   const fav = cur.UserData && cur.UserData.IsFavorite;
   b.push({ label: 'My List', icon: fav ? 'check' : 'list', act: 'fav' });
   if (S.admin && full && canMediaFix(full)) {
-    b.push({ label: 'Fix Audio', icon: 'wrench', act: 'fix-audio', badge: fixState === 'ok' ? { text: '✓ fixed', cls: 'ok' } : fixState === 'run' ? { text: 'running', cls: 'run' } : fixState === 'bad' ? { text: 'failed', cls: 'bad' } : null });
+    b.push({ label: 'Fix Audio', icon: 'wrench', act: 'fix-audio', badge: fixState === 'ok' ? { text: 'fixed', cls: 'ok' } : fixState === 'run' ? { text: 'running', cls: 'run' } : fixState === 'bad' ? { text: 'failed', cls: 'bad' } : null });
     b.push({ label: 'Fetch Subtitle', icon: 'sub', act: 'fix-subtitle' });
   }
   return b;
@@ -214,7 +215,7 @@ async function loadSeries(my) {
   if (seasons.length > 1 || cur.Type === 'Series') {
     rows.upsert({ id: 'seasons', kind: 'pill', order: 10, onOk: (s) => loadEpisodes(s.Id, token) }, seasons);
     const row = rows.list.find((r) => r.def.id === 'seasons');
-    if (row) row.idx = Math.max(0, seasons.findIndex((s) => s.Id === want));
+    if (row) { row.idx = Math.max(0, seasons.findIndex((s) => s.Id === want)); if (row.built) { row.cards.forEach((c, j) => c.classList.toggle('sel', j === row.idx)); rows.scroll(row, false); } }
   }
   if (want) await loadEpisodes(want, my);
   if (my === token && cur.Type === 'Series') {

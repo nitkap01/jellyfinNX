@@ -157,6 +157,7 @@ export class Rows {
       this.scroll(row, false);
     } else {
       for (let i = 0; i < row.items.length; i++) row.cards[i] = makeCard(row, i, false);
+      if (row.kind === 'pill' && row.cards[row.idx]) row.cards[row.idx].classList.add('sel');
       if (K.scroll) this.scroll(row, false);
     }
   }
@@ -228,7 +229,8 @@ export class Rows {
 
   setIdx(row, i) { row.idx = i; this.focusCurrent(); }
 
-  key(k) {
+  key(k, e) {
+    const held = !!(e && e.repeat);
     const row = this.row;
     if (!row) {
       if (k === 'left' && this.o.onExitLeft) { this.o.onExitLeft(); return true; }
@@ -238,7 +240,7 @@ export class Rows {
     switch (k) {
       case 'left':
         if (row.idx > 0) { this.setIdx(row, row.idx - 1); return true; }
-        if (this.o.onExitLeft) { this.o.onExitLeft(); return true; }
+        if (this.o.onExitLeft && !held) { this.o.onExitLeft(); return true; }
         return true;
       case 'right':
         if (row.idx < row.items.length - 1) this.setIdx(row, row.idx + 1);
@@ -246,7 +248,7 @@ export class Rows {
         return true;
       case 'up':
         if (this.r > 0) { this.setRow(this.r - 1); return true; }
-        if (this.o.onExitUp) { this.o.onExitUp(); return true; }
+        if (this.o.onExitUp && !held) { this.o.onExitUp(); return true; }
         return true;
       case 'down':
         if (this.r < this.list.length - 1) this.setRow(this.r + 1);
@@ -280,7 +282,7 @@ function makeCard(row, i, absolute) {
     if (it.cls) c.className += ' ' + it.cls;
     if (it.icon) el('span', 'ic', c).innerHTML = ICON[it.icon] || '';
     el('span', 'lb', c, it.label);
-    if (it.badge) el('span', 'bbadge ' + (it.badge.cls || ''), c, it.badge.text);
+    if (it.badge) { const b = el('span', 'bbadge ' + (it.badge.cls || ''), c); if (it.badge.cls === 'ok') el('span', 'ic', b).innerHTML = ICON.check; el('span', '', b, it.badge.text); }
   } else if (row.kind === 'ep') {
     c = el('div', 'ep');
     const box = el('div', 'epi', c);
@@ -289,7 +291,7 @@ function makeCard(row, i, absolute) {
     if (src) { const im = el('img', '', box); im.alt = ''; im.src = src; }
     const p = progressPct(it);
     if (p > 0 && p < 99) { const b = el('div', 'pb', box); el('i', '', b).style.transform = 'scaleX(' + p / 100 + ')'; }
-    if (it.UserData && it.UserData.Played) el('div', 'seen', box, '✓');
+    if (it.UserData && it.UserData.Played) el('div', 'seen', box).innerHTML = ICON.check;
     el('div', 'ept', c, (it.IndexNumber != null ? it.IndexNumber + '. ' : '') + it.Name);
     el('div', 'epm', c, fmtRuntime(it.RunTimeTicks));
   } else {
@@ -297,7 +299,7 @@ function makeCard(row, i, absolute) {
     const [src, titled] = row.kind === 'poster' ? posterImg(it, K.w, K.h) : cardImg(it, K.w, K.h);
     el('div', 'ph', c, it.Type === 'Episode' ? (it.SeriesName || it.Name) : it.Name);
     if (src) { const im = el('img', '', c); im.alt = ''; im.src = src; }
-    if (!titled) {
+    if (!titled && src) {
       const t = el('div', 'ttl', c, it.Type === 'Episode' ? (it.SeriesName || '') : it.Name);
       if (it.Type === 'Episode') el('div', 'sttl', t, epLabel(it) + ' ' + it.Name);
     }
@@ -309,7 +311,7 @@ function makeCard(row, i, absolute) {
     queueFixBadge(it.Path, (d) => {
       if (!d.fixed || c._fix) return;
       c._fix = true;
-      el('div', 'fixok', row.kind === 'ep' ? c.firstChild : c, '✓');
+      el('div', 'fixok', row.kind === 'ep' ? c.firstChild : c).innerHTML = ICON.check;
       if (row.onBadge) row.onBadge(c);
     });
   }

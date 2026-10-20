@@ -60,13 +60,13 @@ export function searchScreen(host) {
     hide() { root.classList.remove('on'); },
     resume() { if (focus === 'kb') kb.focus(); else rows.focus(); },
     reenter() { focus = 'kb'; rows.blur(); kb.focus(); },
-    key(k) {
+    key(k, e) {
       if (k === 'back') {
         if (focus === 'res') { rows.blur(); focus = 'kb'; kb.focus(); return true; }
         return false;
       }
       if (focus === 'kb') return kb.key(k);
-      const handled = rows.key(k);
+      const handled = rows.key(k, e);
       if (rows.item) setBgLater(rows.item);
       return handled;
     },

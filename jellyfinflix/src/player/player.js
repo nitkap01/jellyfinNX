@@ -92,8 +92,8 @@ function build() {
 function ctrlDefs() {
   const c = [
     { id: 'pp', label: st && st.paused ? 'Play' : 'Pause', icon: st && st.paused ? 'play' : 'pause' },
-    { id: 'back10', label: '⟲ 10' },
-    { id: 'fwd10', label: '10 ⟳' },
+    { id: 'back10', label: '', icon: 'rew10' },
+    { id: 'fwd10', label: '', icon: 'fwd10' },
     { id: 'menu', label: 'Audio & Subtitles', icon: 'audio' },
   ];
   if (st && st.nextEp) c.push({ id: 'next', label: 'Next Episode', icon: 'next' });
@@ -315,6 +315,9 @@ function drawBar() {
   U.tcur.textContent = fmtClock(p / 1000);
   U.tleft.textContent = '-' + fmtClock((dur - p) / 1000);
   U.tip.textContent = st.target != null ? fmtClock(st.target / 1000) : '';
+  if (st.target != null && st.seekMul > 1) {
+    U.tip.appendChild(el('span', 'p-mul' + (st.seekDir < 0 ? ' rw' : ''))).innerHTML = ICON.ff + st.seekMul + '×';
+  }
   U.tip.style.transform = U.knob.style.transform;
   U.tip.classList.toggle('on', st.target != null);
   drawThumb(f);
@@ -367,19 +370,27 @@ function togglePause() {
 
 function seekStep(dir, repeat) {
   if (!st || !st.started) return;
+  // Single tap = 10 s. While the key is held, the step doubles every 0.5 s: 10, 20, 40, 80, 160 s...
+  // capped at 2% of the runtime (at least 1 min, at most 5 min).
   const now = Date.now();
-  st.seekN = repeat || now - st.lastSeek < 450 ? st.seekN + 1 : 1;
+  if (!repeat || now - st.lastSeek > 600 || st.seekDir !== dir) { st.holdStart = now; st.seekDir = dir; st.lastStep = 0; }
   st.lastSeek = now;
-  const step = st.seekN < 4 ? 10 : st.seekN < 10 ? 30 : st.seekN < 18 ? 60 : 120;
+  // the remote repeats ~10-20 times a second; take one step per 250 ms so the ramp is the same on every remote
+  if (repeat && now - st.lastStep < 240) { poke(); clearTimeout(st.seekT); const m = st; st.seekT = setTimeout(() => commitSeek(m), 400); return; }
+  st.lastStep = now;
+  const cap = Math.min(300000, Math.max(60000, (st.dur || 0) * 0.02));
+  const step = Math.min(cap, 10000 * Math.pow(2, Math.floor((now - st.holdStart) / 500)));
+  st.seekMul = Math.round(step / 10000);
   const base = st.target != null ? st.target : st.pos;
-  st.target = Math.max(0, Math.min((st.dur || 1e12) - 3000, base + dir * step * 1000));
+  st.target = Math.max(0, Math.min((st.dur || 1e12) - 3000, base + dir * step));
   drawBar();
   clearTimeout(st.seekT);
   const my = st;
   st.seekT = setTimeout(() => commitSeek(my), 400);
 }
 
-function seekBy(ms) { if (!st) return; st.target = Math.max(0, Math.min((st.dur || 1e12) - 3000, (st.target != null ? st.target : st.pos) + ms)); drawBar(); clearTimeout(st.seekT); const my = st; st.seekT = setTimeout(() => commitSeek(my), 300); }
+function seekBy(ms) {
+  if (st) st.seekMul = 1; if (!st) return; st.target = Math.max(0, Math.min((st.dur || 1e12) - 3000, (st.target != null ? st.target : st.pos) + ms)); drawBar(); clearTimeout(st.seekT); const my = st; st.seekT = setTimeout(() => commitSeek(my), 300); }
 
 function commitSeek(my) {
   if (my !== st || my.target == null) return;
@@ -427,7 +438,23 @@ function ended(my) {
 // ---------- audio & subtitles ----------
 function audioList(my) { return my.streams.filter((s) => s.Type === 'Audio'); }
 function subList(my) { return my.streams.filter((s) => s.Type === 'Subtitle'); }
-function streamLabel(s) { return s.DisplayTitle || [s.Language, s.Codec].filter(Boolean).join(' ') || 'Track ' + s.Index; }
+const LANG = { eng: 'English', en: 'English', hin: 'Hindi', hi: 'Hindi', ita: 'Italian', fre: 'French', fra: 'French', ger: 'German', deu: 'German', spa: 'Spanish', jpn: 'Japanese',
+  kor: 'Korean', chi: 'Chinese', zho: 'Chinese', rus: 'Russian', por: 'Portuguese', ara: 'Arabic', tam: 'Tamil', tel: 'Telugu', mal: 'Malayalam', ben: 'Bengali', pun: 'Punjabi',
+  urd: 'Urdu', mar: 'Marathi', dut: 'Dutch', nld: 'Dutch', swe: 'Swedish', nor: 'Norwegian', dan: 'Danish', fin: 'Finnish', pol: 'Polish', tur: 'Turkish', gre: 'Greek', heb: 'Hebrew' };
+function streamLabel(s) {
+  const lang = s.Language && s.Language.toLowerCase() !== 'und' ? LANG[s.Language.toLowerCase()] || s.Language.toUpperCase() : 'Unknown language';
+  const parts = [lang];
+  if (s.Title && !/^(undefined|und)$/i.test(s.Title) && s.Title.toLowerCase() !== lang.toLowerCase()) parts.push(s.Title);
+  if (s.Type === 'Audio') {
+    parts.push((s.Codec || '').toUpperCase() + (s.ChannelLayout ? ' ' + s.ChannelLayout : s.Channels ? ' ' + s.Channels + 'ch' : ''));
+  } else {
+    parts.push((s.Codec || '').toUpperCase().replace('SUBRIP', 'SRT').replace('PGSSUB', 'PGS'));
+    if (s.IsForced) parts.push('Forced');
+  }
+  if (s.IsExternal) parts.push('External');
+  if (s.IsDefault) parts.push('Default');
+  return parts.filter(Boolean).join(' · ');
+}
 
 function selectAudio(my, index, quiet) {
   const s = my.streams.find((x) => x.Index === index);
@@ -581,7 +608,7 @@ function menuCategories(my) {
   const cats = [];
   cats.push({ title: 'Audio', items: audioList(my).map((s) => ({ label: streamLabel(s), on: s.Index === my.audio, act: () => selectAudio(my, s.Index) })) });
   cats.push({ title: 'Subtitles', items: [{ label: 'Off', on: my.sub < 0, act: () => selectSub(my, -1) }].concat(subList(my).map((s) => ({
-    label: streamLabel(s) + (s.IsExternal ? ' · file' : '') + (s.IsTextSubtitleStream === false ? ' · burned in by server' : ''), on: s.Index === my.sub, act: () => selectSub(my, s.Index) }))) });
+    label: streamLabel(s) + (s.IsTextSubtitleStream === false ? ' · burned in by server' : ''), on: s.Index === my.sub, act: () => selectSub(my, s.Index) }))) });
   cats.push({ title: 'Subtitle style', items: [].concat(
     SUB_SIZES.map(([l, v]) => ({ label: 'Size: ' + l, on: (pr.subSize || 'm') === v, keep: true, act: () => { store.setPref('subSize', v); applySubStyle(); } })),
     SUB_POS.map(([l, v]) => ({ label: 'Position: ' + l, on: (pr.subPos || 'low') === v, keep: true, act: () => { store.setPref('subPos', v); applySubStyle(); } })),
@@ -657,7 +684,7 @@ function drawMenu() {
   cat.items.slice(first, first + 11).forEach((it, k) => {
     const ii = first + k;
     const row = el('div', 'pm-i' + (it.on ? ' on' : '') + (it.info ? ' info' : '') + (m.side === 'opts' && ii === oi && !it.info ? ' f' : ''), list, it.label);
-    if (it.badge) el('span', 'pm-badge ' + (it.badge.cls || ''), row, it.badge.text);
+    if (it.badge) { const b = el('span', 'pm-badge ' + (it.badge.cls || ''), row); if (it.badge.cls === 'ok') el('span', 'ic', b).innerHTML = ICON.check; el('span', '', b, it.badge.text); }
   });
   if (cat.onShow) cat.onShow(() => { if (st && st.menu === m) drawMenu(); });
 }
@@ -694,7 +721,7 @@ function fixStatus(path) {
   return fetchFixStatus(path).then((d) => {
     if (!d) return null;
     if (d.state === 'running') return { text: 'fixing… ' + (d.progressPercent != null ? d.progressPercent + '%' : ''), cls: 'run' };
-    if (d.fixed) return { text: '✓ Audio fixed', cls: 'ok' };
+    if (d.fixed) return { text: 'Audio fixed', cls: 'ok' };
     if (d.lastResultStatus && !/^(OK|DRYRUN)/.test(d.lastResultStatus)) return { text: 'last fix failed', cls: 'bad' };
     return null;
   });
@@ -823,3 +850,4 @@ export function playerState() {
     tracks: eng && eng.tracks ? eng.tracks().map((t) => t.type + ':' + t.index) : [],
   };
 }
+export function testSeek(ms) { if (st && st.started) { st.target = Math.max(0, ms < 0 ? st.dur + ms : ms); commitSeek(st); } }

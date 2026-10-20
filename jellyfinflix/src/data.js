@@ -60,7 +60,9 @@ export function myListDefs() {
 }
 
 export function search(term) {
-  return get('/Users/{U}/Items', P({ SearchTerm: term, Recursive: true, IncludeItemTypes: 'Movie,Series,Episode', Limit: 40 }), 300000).then(items);
+  const rank = (it) => (it.Type === 'Episode' ? 1 : 0);
+  return get('/Users/{U}/Items', P({ SearchTerm: term, Recursive: true, IncludeItemTypes: 'Movie,Series,Episode', Limit: 40 }), 300000)
+    .then(items).then((list) => list.map((it, i) => [it, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]));
 }
 
 export const nextUpFor = (seriesId) => get('/Shows/NextUp', P({ UserId: '{U}', SeriesId: seriesId, Limit: 1, EnableResumable: true }), 0).then(items);

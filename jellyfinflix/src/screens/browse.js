@@ -71,7 +71,7 @@ export function browseScreen(host, cfg) {
     if (it.ProductionYear) m.push(it.ProductionYear);
     if (it.OfficialRating) m.push(it.OfficialRating);
     if (it.Type !== 'Series' && it.RunTimeTicks) m.push(fmtRuntime(it.RunTimeTicks));
-    if (it.CommunityRating) m.push('★ ' + it.CommunityRating.toFixed(1));
+    if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
     H.meta.textContent = m.join('   ·   ');
     H.ov.textContent = it.Overview || '';
   }
@@ -119,14 +119,19 @@ export function browseScreen(host, cfg) {
     if (d.grid) {
       const n = Math.ceil(items.length / GRID_COLS);
       for (let j = 0; j < n; j++) {
-        rows.upsert(Object.assign({}, d, { id: d.id + '-' + j, title: j ? '' : d.title, order: d.order + j / 1000, rowH: j ? 222 : 272 }), items.slice(j * GRID_COLS, (j + 1) * GRID_COLS));
+        rows.upsert(Object.assign({}, d, { id: d.id + '-' + j, title: j || cfg.title ? '' : d.title, order: d.order + j / 1000, rowH: j || cfg.title ? 222 : 272 }), items.slice(j * GRID_COLS, (j + 1) * GRID_COLS));
       }
       for (let j = n; rows.list.some((r) => r.def.id === d.id + '-' + j); j++) rows.remove(d.id + '-' + j);
       if (!n) emptyMsg(true);
       else emptyMsg(false);
     } else rows.upsert(d, items);
-    if (!firstShown && rows.list.length) firstPaint();
     d._items = items;
+    if (!firstShown && rows.list.length) firstPaint();
+    else if (cfg.hero && !featured) {
+      // the first rows had no movie/series with artwork (e.g. Shows: only episodes) - try again with the new rows
+      pickFeatured();
+      if (featured && mode === 'top') { shown = null; showHero(featured); setBg(backdropImg(featured, 1280)); }
+    }
   }
 
   let emptyEl;
@@ -236,7 +241,7 @@ export function browseScreen(host, cfg) {
     hide() { root.classList.remove('on'); setFlag('deep', false); },
     reenter() { if (cfg.hero) toTop(); else { rows.r = 0; rows.place(); rows.focus(); } },
     resume() {
-      if (mode === 'top' && cfg.hero) paintHeroBtns();
+      if (mode === 'top' && cfg.hero) { paintHeroBtns(); if (featured) setBg(backdropImg(featured, 1280)); }
       else if (rows.list.length) rows.focus();
       if (mode === 'rows' && rows.item) setBg(backdropImg(rows.item, 1280));
     },
@@ -269,7 +274,7 @@ export function browseScreen(host, cfg) {
         return false;
       }
       if (k === 'play' || k === 'playpause') { const it = rows.item; if (it) playItem(it); return true; }
-      return rows.key(k);
+      return rows.key(k, e);
     },
     keyup(k) {
       if (k === 'ok' && okTimer) { clearTimeout(okTimer); okTimer = 0; if (!okHeld) { const it = rows.item; if (it) playItem(it); } }

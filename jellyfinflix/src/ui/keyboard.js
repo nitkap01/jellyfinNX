@@ -1,5 +1,6 @@
 // On-screen keyboard (letter grid) for search, passwords and the server address.
 import { el } from '../util.js';
+import { ICON } from '../icons.js';
 
 const LAYOUTS = {
   abc: ['abcdef', 'ghijkl', 'mnopqr', 'stuvwx', 'yz1234', '567890'],
@@ -16,8 +17,8 @@ export class Keyboard {
     this.el = el('div', 'kb' + (o.full ? ' kb-full' : ''), host);
     this.grid = el('div', 'kb-grid', this.el);
     this.special = o.full
-      ? [{ k: 'shift', l: 'aA' }, { k: 'sym', l: '#+=' }, { k: ' ', l: 'Space' }, { k: 'del', l: '⌫' }, { k: 'done', l: 'Done' }]
-      : [{ k: ' ', l: 'Space' }, { k: 'del', l: '⌫' }, { k: 'clear', l: 'Clear' }];
+      ? [{ k: 'shift', l: 'aA' }, { k: 'sym', l: '#+=' }, { k: ' ', l: 'Space' }, { k: 'del', l: '', icon: 'del' }, { k: 'done', l: 'Done' }]
+      : [{ k: ' ', l: 'Space' }, { k: 'del', l: '', icon: 'del' }, { k: 'clear', l: 'Clear' }];
     this.r = 0; this.c = 0;
     this.render();
   }
@@ -30,7 +31,7 @@ export class Keyboard {
       return k;
     }));
     const sp = el('div', 'kb-sp', this.grid);
-    this.keys.push(this.special.map((s) => { const k = el('div', 'kk ks', sp, s.l); k._ch = s.k; return k; }));
+    this.keys.push(this.special.map((s) => { const k = el('div', 'kk ks', sp, s.l); if (s.icon) k.innerHTML = ICON[s.icon]; k._ch = s.k; return k; }));
     this.paint();
   }
 
