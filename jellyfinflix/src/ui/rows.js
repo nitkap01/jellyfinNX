@@ -230,7 +230,7 @@ export class Rows {
   setIdx(row, i) { row.idx = i; this.focusCurrent(); }
 
   key(k, e) {
-    const held = !!(e && e.repeat);
+    const held = !!(e && (e.repeat || e.held));
     const row = this.row;
     if (!row) {
       if (k === 'left' && this.o.onExitLeft) { this.o.onExitLeft(); return true; }

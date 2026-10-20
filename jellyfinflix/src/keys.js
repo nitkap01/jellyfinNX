@@ -7,6 +7,18 @@ const MAP = {
 
 export function keyName(e) { return MAP[e.keyCode] || null; }
 
+// Held-key detection that works with the real Samsung remote: it repeats plain keydowns (no e.repeat flag) and
+// may send a keyup between repeats. A press counts as held when it comes before its keyup, or within 150 ms of
+// the last press of the same key (faster than any human double tap).
+const H = { code: 0, down: false, last: 0 };
+export function noteKeyDown(e) {
+  const now = Date.now();
+  const held = !!e.repeat || (H.code === e.keyCode && (H.down || now - H.last < 150));
+  H.code = e.keyCode; H.down = true; H.last = now;
+  return held;
+}
+export function noteKeyUp(e) { if (e.keyCode === H.code) H.down = false; }
+
 export function registerTvKeys() {
   const t = window.tizen && window.tizen.tvinputdevice;
   if (!t) return;

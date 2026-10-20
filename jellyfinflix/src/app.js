@@ -1,5 +1,5 @@
 // Screen + overlay stack and the single key dispatcher.
-import { keyName } from './keys.js';
+import { keyName, noteKeyDown, noteKeyUp } from './keys.js';
 import { metrics } from './util.js';
 
 const stack = [];
@@ -46,8 +46,9 @@ document.addEventListener('keydown', (e) => {
   const k = keyName(e);
   if (!k) return;
   e.preventDefault();
+  e.held = noteKeyDown(e); // read by rows (no leaving a row/screen edge while a key is held)
   // Held key: if the last move has not reached the screen yet, drop this repeat (no queued moves, no lag).
-  if (e.repeat && framePending) return;
+  if (e.held && framePending) return;
   framePending = true;
   const t0 = performance.now();
   metrics.lastKey = t0;
@@ -68,6 +69,7 @@ document.addEventListener('keydown', (e) => {
 }, true);
 
 document.addEventListener('keyup', (e) => {
+  noteKeyUp(e);
   const L = app.top();
   const k = keyName(e);
   if (L && L.keyup && k) L.keyup(k, e);
