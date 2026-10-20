@@ -1,0 +1,246 @@
+<title>JellyfinFlix Design Samples</title>
+<style>
+/* Layout: a column of 16:9 TV frames (one per screen), with an accent switcher at the top. The frames are dark by design (TV UI); the page around them follows the viewer's theme. */
+:root{
+  --page:#eef0f2; --pagefg:#1b1f24; --pagemute:#5e6670; --line:#d3d8de;
+  --tv:#0b0b0d; --tv2:#141418; --tv3:#1f1f25; --txt:#f4f4f6; --mut:#a3a3ad; --acc:#e50914; --acc2:#b20710;
+  --font:"Segoe UI","Helvetica Neue",Arial,system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--page:#0f1215;--pagefg:#e6e9ec;--pagemute:#98a1ab;--line:#262c33;color-scheme:dark}}
+:root[data-theme="dark"]{--page:#0f1215;--pagefg:#e6e9ec;--pagemute:#98a1ab;--line:#262c33;color-scheme:dark}
+body.a-amber{--acc:#f2a516;--acc2:#c98400}
+body.a-ice{--acc:#3fb6ff;--acc2:#1a8fd6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--pagefg);font-family:var(--font);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+h1{font-size:clamp(26px,4vw,40px);margin:0;letter-spacing:-.01em}
+h2{font-size:18px;margin:0 0 4px}
+.sub{color:var(--pagemute);margin:6px 0 0;max-width:72ch}
+.tag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--pagemute)}
+.pick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pick button{font:inherit;font-size:14px;border:1px solid var(--line);background:transparent;color:var(--pagefg);border-radius:999px;padding:6px 14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.pick button[aria-pressed="true"]{border-color:var(--pagefg);font-weight:600}
+.pick i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.shot{display:flex;flex-direction:column;gap:8px}
+.note{color:var(--pagemute);font-size:14px;margin:0;max-width:80ch}
+/* TV frame: fixed 1920x1080 design, scaled to fit */
+.frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:6px solid #222;container-type:inline-size}
+.tv{position:absolute;inset:0;width:1920px;height:1080px;transform-origin:0 0;background:var(--tv);color:var(--txt);font-family:var(--font);overflow:hidden}
+.rail{position:absolute;left:0;top:0;bottom:0;width:96px;background:linear-gradient(90deg,#000c,#0000);display:flex;flex-direction:column;gap:34px;align-items:center;padding-top:150px;z-index:3}
+.rail span{width:34px;height:34px;border-radius:8px;background:#ffffff26}
+.rail span.on{background:var(--txt)}
+.brand{position:absolute;left:130px;top:46px;font-weight:800;font-size:34px;letter-spacing:.02em;z-index:3}
+.brand b{color:var(--acc)}
+.hero{position:absolute;left:0;right:0;top:0;height:720px;background:
+  radial-gradient(1200px 600px at 75% 30%, #6b4b2a 0%, #2a1d14 45%, transparent 70%),
+  linear-gradient(120deg,#1b2633 0%,#0b0b0d 70%)}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,var(--tv) 2%,transparent 45%),linear-gradient(90deg,var(--tv) 8%,transparent 60%)}
+.hcopy{position:absolute;left:150px;top:230px;width:760px;z-index:2}
+.hcopy .logo{font-size:96px;font-weight:900;line-height:.95;letter-spacing:-.02em;text-transform:uppercase}
+.hcopy .meta{margin-top:22px;font-size:26px;color:var(--mut);display:flex;gap:18px;align-items:center}
+.hcopy .meta .m{color:#46d369;font-weight:700}
+.hcopy p{font-size:26px;line-height:1.4;color:#dcdce2;margin:20px 0 0}
+.btns{display:flex;gap:18px;margin-top:34px}
+.btn{height:72px;padding:0 40px;border-radius:8px;font-size:28px;font-weight:700;display:inline-flex;align-items:center;gap:14px;background:#ffffff33;color:var(--txt)}
+.btn.f{background:var(--txt);color:#000;outline:5px solid var(--txt);outline-offset:4px}
+.tri{width:0;height:0;border-left:22px solid currentColor;border-top:14px solid transparent;border-bottom:14px solid transparent}
+.rows{position:absolute;left:150px;right:0;top:640px;z-index:2;display:flex;flex-direction:column;gap:30px}
+.rowt{font-size:30px;font-weight:700;margin-bottom:14px}
+.cards{display:flex;gap:16px}
+.c{flex:0 0 auto;width:330px;height:186px;border-radius:8px;position:relative;overflow:hidden;background:var(--g,#333)}
+.c .t{position:absolute;left:16px;bottom:18px;font-weight:800;font-size:26px;text-transform:uppercase;letter-spacing:.02em;text-shadow:0 2px 8px #000}
+.c .pb{position:absolute;left:0;right:0;bottom:0;height:7px;background:#ffffff40}
+.c .pb i{display:block;height:100%;background:var(--acc)}
+.c.f{transform:scale(1.14);z-index:2;outline:5px solid var(--txt);outline-offset:-1px;box-shadow:0 18px 40px #000a}
+.c.f+.c{margin-left:24px}
+.poster{width:220px;height:330px}
+.dim{opacity:.55}
+/* details overlay */
+.ov{position:absolute;inset:0;background:linear-gradient(90deg,#0b0b0df2 0%,#0b0b0dcc 45%,#0b0b0d40 100%)}
+.det{position:absolute;left:150px;top:150px;width:900px}
+.det .logo{font-size:84px;font-weight:900;text-transform:uppercase;line-height:.95}
+.det .meta{margin-top:20px;font-size:26px;color:var(--mut);display:flex;gap:18px;flex-wrap:wrap}
+.chip{border:2px solid #ffffff55;border-radius:6px;padding:0 10px;font-size:22px}
+.det p{font-size:26px;color:#dcdce2;margin:22px 0 0;line-height:1.4}
+.eps{position:absolute;left:150px;right:80px;bottom:60px}
+.seas{display:flex;gap:16px;margin-bottom:18px;font-size:26px}
+.seas span{padding:8px 20px;border-radius:999px;background:#ffffff1f}
+.seas span.on{background:var(--txt);color:#000;font-weight:700}
+.ep{width:420px;height:236px}
+.ep .n{position:absolute;left:16px;top:12px;font-size:24px;font-weight:700;text-shadow:0 2px 6px #000}
+/* player */
+.pl{position:absolute;inset:0;background:radial-gradient(900px 500px at 60% 40%,#2c3b52,#06080b 75%)}
+.pl .top{position:absolute;left:80px;top:60px;font-size:30px;color:#ddd}
+.pl .top b{display:block;font-size:42px;color:#fff}
+.skip{position:absolute;right:90px;bottom:250px;height:76px;padding:0 36px;border-radius:8px;background:var(--txt);color:#000;font-size:30px;font-weight:700;display:flex;align-items:center;outline:5px solid var(--txt);outline-offset:4px}
+.bar{position:absolute;left:80px;right:80px;bottom:150px;height:10px;background:#ffffff40;border-radius:6px}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--acc);border-radius:6px}
+.bar i:after{content:"";position:absolute;right:-14px;top:-12px;width:34px;height:34px;border-radius:50%;background:var(--acc)}
+.bar .bf{position:absolute;left:38%;top:0;bottom:0;width:12%;background:#ffffff60}
+.times{position:absolute;left:80px;right:80px;bottom:90px;display:flex;justify-content:space-between;font-size:28px;color:#ddd}
+.ctrls{position:absolute;left:0;right:0;bottom:30px;display:flex;justify-content:center;gap:60px;font-size:26px;color:#ddd}
+.ctrls span.on{color:#fff;font-weight:700;border-bottom:4px solid var(--acc);padding-bottom:6px}
+.next{position:absolute;right:90px;bottom:250px;width:560px;background:#000c;border-radius:12px;padding:26px;font-size:24px;display:none}
+/* search */
+.kb{position:absolute;left:150px;top:180px;width:620px}
+.q{height:76px;border-bottom:3px solid #ffffff55;font-size:40px;display:flex;align-items:center;gap:10px;margin-bottom:26px}
+.q i{width:3px;height:44px;background:var(--acc);display:inline-block}
+.keys{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.keys span{height:78px;border-radius:8px;background:#ffffff14;display:grid;place-items:center;font-size:30px}
+.keys span.f{background:var(--txt);color:#000;font-weight:700}
+.res{position:absolute;left:840px;top:180px;right:70px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.grid .c{width:auto;height:180px}
+/* profiles */
+.prof{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px}
+.prof h3{font-size:64px;font-weight:600;margin:0}
+.pp{display:flex;gap:56px}
+.p{display:flex;flex-direction:column;align-items:center;gap:22px;font-size:30px;color:var(--mut)}
+.p .av{width:220px;height:220px;border-radius:12px;display:grid;place-items:center;font-size:96px;font-weight:800;color:#fff}
+.p.f .av{outline:6px solid var(--txt);outline-offset:6px;transform:scale(1.06)}
+.p.f{color:var(--txt)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--pagemute)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="tag">JTV-8 · design samples · for your pick</div>
+    <h1>JellyfinFlix: how it will look</h1>
+    <p class="sub">Six TV screens drawn at the real 1920×1080 TV size. Netflix's layout and behaviour, with our own name and look. The posters are placeholders: on the TV they show your real library art. Choose an accent colour below; it changes the progress bars, the logo dot and the player.</p>
+  </header>
+
+  <div class="pick" role="group" aria-label="Accent colour">
+    <span class="tag">Accent</span>
+    <button type="button" data-a="red" aria-pressed="true"><i style="background:#e50914"></i>A · Cinema red</button>
+    <button type="button" data-a="amber" aria-pressed="false"><i style="background:#f2a516"></i>B · Amber</button>
+    <button type="button" data-a="ice" aria-pressed="false"><i style="background:#3fb6ff"></i>C · Ice blue</button>
+  </div>
+
+  <section class="shot">
+    <h2>1 · Who's watching</h2>
+    <div class="frame"><div class="tv">
+      <div class="brand" style="left:80px">Jellyfin<b>Flix</b></div>
+      <div class="prof"><h3>Who's watching?</h3>
+        <div class="pp">
+          <div class="p f"><div class="av" style="background:linear-gradient(135deg,#2c6fd6,#1b3f7d)">N</div>Nitin</div>
+          <div class="p"><div class="av" style="background:linear-gradient(135deg,#d6a12c,#7d5a1b)">R</div>Ritika</div>
+          <div class="p"><div class="av" style="background:linear-gradient(135deg,#3aa86b,#1d5c3a)">K</div>Kids</div>
+          <div class="p"><div class="av" style="background:#ffffff1a;font-size:120px;font-weight:300">+</div>Add</div>
+        </div></div>
+    </div></div>
+    <p class="note">Jellyfin users as profiles. Your last profile is remembered, so normally this screen is skipped and you land on Home.</p>
+  </section>
+
+  <section class="shot">
+    <h2>2 · Home: banner + rows</h2>
+    <div class="frame"><div class="tv">
+      <div class="hero"></div>
+      <div class="rail"><span></span><span class="on"></span><span></span><span></span><span></span></div>
+      <div class="brand">Jellyfin<b>Flix</b></div>
+      <div class="hcopy">
+        <div class="logo">The<br>Pyramid</div>
+        <div class="meta"><span class="m">New</span><span>2014</span><span class="chip">A</span><span>1h 29m</span><span>Horror · Thriller</span></div>
+        <p>An archaeological team finds a buried pyramid in the Egyptian desert, and something inside it is waiting.</p>
+        <div class="btns"><span class="btn f"><span class="tri"></span>Play</span><span class="btn">ⓘ More Info</span></div>
+      </div>
+      <div class="rows" style="top:760px">
+        <div><div class="rowt">Continue Watching for Nitin</div>
+          <div class="cards">
+            <div class="c f" style="--g:linear-gradient(135deg,#3a5f8a,#132235)"><span class="t">Dark Harbour</span><span class="pb"><i style="width:62%"></i></span></div>
+            <div class="c" style="--g:linear-gradient(135deg,#7a3f2c,#25120c)"><span class="t">Red Line</span><span class="pb"><i style="width:25%"></i></span></div>
+            <div class="c" style="--g:linear-gradient(135deg,#2c7a5f,#0c251c)"><span class="t">Green Valley</span><span class="pb"><i style="width:80%"></i></span></div>
+            <div class="c" style="--g:linear-gradient(135deg,#6a2c7a,#1f0c25)"><span class="t">Night Shift</span><span class="pb"><i style="width:40%"></i></span></div>
+            <div class="c" style="--g:linear-gradient(135deg,#7a6a2c,#25200c)"><span class="t">Gold Rush</span><span class="pb"><i style="width:10%"></i></span></div>
+          </div></div>
+      </div>
+    </div></div>
+    <p class="note">Left rail (Search, Home, Shows, Movies, My List) shrinks to icons. The banner follows the card you're on after a short pause. Focused card zooms; the row slides so focus stays on the left. More rows below: Next Up, Recently Added, My List, genres.</p>
+  </section>
+
+  <section class="shot">
+    <h2>3 · Browsing rows (scrolled down)</h2>
+    <div class="frame"><div class="tv">
+      <div class="hero" style="height:520px;opacity:.6"></div>
+      <div class="rail"><span></span><span class="on"></span><span></span><span></span><span></span></div>
+      <div class="brand">Jellyfin<b>Flix</b></div>
+      <div class="rows" style="top:120px;gap:44px">
+        <div class="dim"><div class="rowt">Next Up</div><div class="cards">
+          <div class="c" style="--g:linear-gradient(135deg,#2c4a7a,#0c1525)"><span class="t">S2 · E4</span></div><div class="c" style="--g:linear-gradient(135deg,#7a2c4a,#250c15)"><span class="t">S1 · E9</span></div><div class="c" style="--g:linear-gradient(135deg,#4a7a2c,#15250c)"><span class="t">S3 · E1</span></div><div class="c" style="--g:linear-gradient(135deg,#7a4a2c,#25150c)"><span class="t">S1 · E2</span></div><div class="c" style="--g:linear-gradient(135deg,#2c7a7a,#0c2525)"><span class="t">S4 · E6</span></div></div></div>
+        <div><div class="rowt">Recently Added · Movies</div><div class="cards">
+          <div class="c poster" style="--g:linear-gradient(160deg,#405a7a,#101820)"></div>
+          <div class="c poster f" style="--g:linear-gradient(160deg,#7a5a40,#201810)"><span class="t" style="font-size:22px">The Pyramid</span></div>
+          <div class="c poster" style="--g:linear-gradient(160deg,#5a407a,#181020)"></div><div class="c poster" style="--g:linear-gradient(160deg,#407a5a,#102018)"></div><div class="c poster" style="--g:linear-gradient(160deg,#7a405a,#201018)"></div><div class="c poster" style="--g:linear-gradient(160deg,#7a7a40,#202010)"></div><div class="c poster" style="--g:linear-gradient(160deg,#406a7a,#101c20)"></div></div></div>
+        <div class="dim"><div class="rowt">My List</div><div class="cards">
+          <div class="c" style="--g:linear-gradient(135deg,#55606e,#15181c)"></div><div class="c" style="--g:linear-gradient(135deg,#6e5560,#1c1518)"></div><div class="c" style="--g:linear-gradient(135deg,#606e55,#181c15)"></div><div class="c" style="--g:linear-gradient(135deg,#6e6055,#1c1815)"></div><div class="c" style="--g:linear-gradient(135deg,#556e6e,#151c1c)"></div></div></div>
+      </div>
+    </div></div>
+    <p class="note">Up/Down jumps whole rows and keeps your column. Rows above and below dim slightly so the current row stands out.</p>
+  </section>
+
+  <section class="shot">
+    <h2>4 · More Info (a series)</h2>
+    <div class="frame"><div class="tv">
+      <div class="hero" style="height:1080px;background:radial-gradient(1100px 700px at 75% 35%,#2a4f6b,#0f1c26 55%,#0b0b0d 80%)"></div>
+      <div class="ov"></div>
+      <div class="det">
+        <div class="logo">Dark Harbour</div>
+        <div class="meta"><span style="color:#46d369;font-weight:700">98% match</span><span>2023</span><span class="chip">UA 16+</span><span>3 Seasons</span><span class="chip">HD</span></div>
+        <p>A coastal town hides its secrets until a storm washes them ashore. A detective with nothing to lose starts asking questions.</p>
+        <div class="btns"><span class="btn f"><span class="tri"></span>Resume S2:E3</span><span class="btn">＋ My List</span><span class="btn">Fix Audio</span><span class="btn">Subtitles</span></div>
+      </div>
+      <div class="eps">
+        <div class="seas"><span>Season 1</span><span class="on">Season 2</span><span>Season 3</span></div>
+        <div class="cards">
+          <div class="c ep" style="--g:linear-gradient(135deg,#2c4a6b,#0c1520)"><span class="n">1 · Low Tide</span><span class="pb"><i style="width:100%"></i></span></div>
+          <div class="c ep" style="--g:linear-gradient(135deg,#3a5a7b,#0f1925)"><span class="n">2 · The Lighthouse</span><span class="pb"><i style="width:100%"></i></span></div>
+          <div class="c ep f" style="--g:linear-gradient(135deg,#4a6a8b,#121d2a)"><span class="n">3 · Undertow</span><span class="pb"><i style="width:45%"></i></span></div>
+          <div class="c ep" style="--g:linear-gradient(135deg,#2c4a6b,#0c1520)"><span class="n">4 · Salt</span></div>
+        </div>
+      </div>
+    </div></div>
+    <p class="note">Opens over Home in under a third of a second. Fix Audio and Fetch Subtitle stay here for admin profiles. Movies show "More like this" in place of episodes.</p>
+  </section>
+
+  <section class="shot">
+    <h2>5 · Player (Samsung's own player)</h2>
+    <div class="frame"><div class="tv">
+      <div class="pl"></div>
+      <div class="pl"><div class="top"><b>Dark Harbour</b>S2 · E3 "Undertow"</div></div>
+      <div class="skip">Skip Intro</div>
+      <div class="bar"><span class="bf"></span><i></i></div>
+      <div class="times"><span>17:42</span><span>-29:10</span></div>
+      <div class="ctrls"><span class="on">▶ Pause</span><span>⟲ 10</span><span>10 ⟳</span><span>Audio & Subtitles</span><span>Next Episode</span></div>
+    </div></div>
+    <p class="note">Controls appear on any key press and fade after 3 seconds. Hold Left/Right to seek faster. Skip Intro appears when the server has intro markers. Near the end of an episode a "Next episode in 10" card appears.</p>
+  </section>
+
+  <section class="shot">
+    <h2>6 · Search</h2>
+    <div class="frame"><div class="tv">
+      <div class="rail"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+      <div class="brand">Jellyfin<b>Flix</b></div>
+      <div class="kb"><div class="q">pyr<i></i></div>
+        <div class="keys"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span><span>i</span><span>j</span><span>k</span><span>l</span><span>m</span><span>n</span><span>o</span><span class="f">p</span><span>q</span><span>r</span><span>s</span><span>t</span><span>u</span><span>v</span><span>w</span><span>x</span><span>y</span><span>z</span><span>1</span><span>2</span><span>␣</span><span>⌫</span></div></div>
+      <div class="res"><div class="rowt">Results for "pyr"</div>
+        <div class="grid">
+          <div class="c f" style="--g:linear-gradient(135deg,#7a5a40,#201810)"><span class="t" style="font-size:20px">The Pyramid</span></div>
+          <div class="c" style="--g:linear-gradient(135deg,#40587a,#101620)"></div><div class="c" style="--g:linear-gradient(135deg,#7a4058,#201016)"></div><div class="c" style="--g:linear-gradient(135deg,#587a40,#162010)"></div>
+          <div class="c" style="--g:linear-gradient(135deg,#40707a,#101c20)"></div><div class="c" style="--g:linear-gradient(135deg,#70407a,#1c1020)"></div><div class="c" style="--g:linear-gradient(135deg,#7a7040,#201c10)"></div><div class="c" style="--g:linear-gradient(135deg,#407a58,#102016)"></div>
+        </div></div>
+    </div></div>
+    <p class="note">Results update as you type, with no "search" button to press.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  // Scale each 1920x1080 TV design to its frame.
+  const fit = () => document.querySelectorAll('.frame').forEach(f => { f.querySelector('.tv').style.transform = `scale(${f.clientWidth / 1920})`; });
+  addEventListener('resize', fit); fit();
+  document.querySelectorAll('.pick button').forEach(b => b.addEventListener('click', () => {
+    document.body.classList.remove('a-amber', 'a-ice');
+    if (b.dataset.a !== 'red') document.body.classList.add('a-' + b.dataset.a);
+    document.querySelectorAll('.pick button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+})();
+</script>

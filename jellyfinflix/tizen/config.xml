@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="http://jellyfin.org/JellyfinFlix" version="0.1.0" viewmodes="maximized">
+    <access origin="*" subdomains="true"></access>
+    <tizen:application id="JFlixPkg01.JellyfinFlix" package="JFlixPkg01" required_version="2.3"/>
+    <author href="https://github.com/nitkap01/jellyfinNX" email="officialnitinkapoor@gmail.com">Nitin Kapoor</author>
+    <content src="index.html"/>
+    <description>JellyfinFlix - fast Jellyfin client for Samsung TV with a Netflix-style layout.</description>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <icon src="icon.png"/>
+    <name>JellyfinFlix</name>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:profile name="tv"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>
