@@ -21,7 +21,19 @@ export function initPlayer(h) {
   host = h;
   // TV home button / app switch: stop cleanly so the position is saved.
   document.addEventListener('visibilitychange', () => { if (document.hidden && st) close(); });
+  // Hold detection that works with every remote: some Samsung remotes repeat keydown without e.repeat (and some
+  // send keyup between repeats). A key counts as held if it is pressed again before its keyup, or within 300 ms.
+  const SEEK_KEYS = { 37: 1, 39: 1, 412: 1, 417: 1 };
+  // on window (capture) so this runs before the app's own key handler on document
+  window.addEventListener('keydown', (e) => {
+    if (!SEEK_KEYS[e.keyCode]) return;
+    const now = Date.now();
+    held.on = held.code === e.keyCode && (held.down || e.repeat || now - held.last < 300);
+    held.code = e.keyCode; held.down = true; held.last = now; if (e.repeat) held.sawRepeat = true;
+  }, true);
+  window.addEventListener('keyup', (e) => { if (SEEK_KEYS[e.keyCode]) { held.down = false; held.ups++; } }, true);
 }
+const held = { code: 0, down: false, on: false, last: 0, ups: 0, sawRepeat: false };
 
 function playbackInfo(item, o) {
   o = o || {};
@@ -375,10 +387,14 @@ function togglePause() {
 
 function seekStep(dir, repeat) {
   if (!st || !st.started) return;
+  repeat = repeat || held.on;
   // Single tap = 10 s. While the key is held, the step doubles every 0.5 s: 10, 20, 40, 80, 160 s...
   // capped at 2% of the runtime (at least 1 min, at most 5 min).
   const now = Date.now();
-  if (!repeat || now - st.lastSeek > 600 || st.seekDir !== dir) { st.holdStart = now; st.seekDir = dir; st.lastStep = 0; }
+  if (!repeat || now - st.lastSeek > 600 || st.seekDir !== dir) {
+    if (st.holdSteps > 1) log('seek hold', { steps: st.holdSteps, maxStep_s: st.holdMax / 1000, held_ms: st.lastSeek - st.holdStart, eRepeat: held.sawRepeat, keyups: held.ups });
+    st.holdStart = now; st.seekDir = dir; st.lastStep = 0; st.holdSteps = 0; st.holdMax = 0; held.ups = 0; held.sawRepeat = false;
+  }
   st.lastSeek = now;
   // the remote repeats ~10-20 times a second; take one step per 250 ms so the ramp is the same on every remote
   if (repeat && now - st.lastStep < 240) { poke(); clearTimeout(st.seekT); const m = st; st.seekT = setTimeout(() => commitSeek(m), 400); return; }
@@ -386,6 +402,7 @@ function seekStep(dir, repeat) {
   const cap = Math.min(300000, Math.max(60000, (st.dur || 0) * 0.02));
   const step = Math.min(cap, 10000 * Math.pow(2, Math.floor((now - st.holdStart) / 500)));
   st.seekMul = Math.round(step / 10000);
+  st.holdSteps = (st.holdSteps || 0) + 1; st.holdMax = Math.max(st.holdMax || 0, step);
   const base = st.target != null ? st.target : st.pos;
   st.target = Math.max(0, Math.min((st.dur || 1e12) - 3000, base + dir * step));
   drawBar();
