@@ -100,6 +100,7 @@ function build() {
   U.ctrls = el('div', 'p-ctrls', U.ui);
   U.skip = el('div', 'p-skip btn btn-w', root, 'Skip Intro');
   U.next = el('div', 'p-next', root);
+  U.clock = el('div', 'p-clock', root);   // local time, top right, only while paused
   U.menu = el('div', 'p-menu', root);
   U.pauseIco = el('div', 'p-big', root);
   U.eps = episodesPanel(root, { choose: chooseEpisode, closed: closeEpisodes, hover: (e) => prefetchPlayback(e) });
@@ -172,6 +173,7 @@ export function coolDown() {
 function afterPaint(fn) { requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(fn, 0))); }
 
 async function start(item, opts) {
+  showClock(false);
   if (!root) build();
   if (st) await stopPlayback(true);
   const t0 = performance.now();
@@ -388,6 +390,22 @@ function togglePause() {
   U.pauseIco.classList.remove('on'); void U.pauseIco.offsetWidth; U.pauseIco.classList.add('on'); // eslint-disable-line no-void
   report(st, 'progress', st.paused ? 'Pause' : 'Unpause');
   if (st.zone === 'ctrls' || st.zone === 'bar') drawCtrls();
+  showClock(st.paused);
+}
+
+// Local time (top right) while paused only, with when the video would end if resumed now.
+let clockT = 0;
+const hhmm = (d) => { let h = d.getHours(); const m = d.getMinutes(); const ap = h < 12 ? 'AM' : 'PM'; h = h % 12 || 12; return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ap; };
+function drawClock() {
+  const now = new Date();
+  let html = '<div class="pc-t">' + hhmm(now) + '</div>';
+  if (st && st.dur && st.pos != null) html += '<div class="pc-e">Ends at ' + hhmm(new Date(now.getTime() + Math.max(0, st.dur - st.pos))) + '</div>';
+  U.clock.innerHTML = html;
+}
+function showClock(on) {
+  clearInterval(clockT); clockT = 0;
+  if (on) { drawClock(); clockT = setInterval(drawClock, 15000); }
+  U.clock.classList.toggle('on', !!on);
 }
 
 function seekStep(dir, repeat) {
@@ -845,6 +863,7 @@ async function fail(my, e) {
 
 function close() {
   const was = st;
+  showClock(false);
   if (was) log('player close', { item: was.item && was.item.Name, pos: was.pos, dur: was.dur, method: was.method });
   // Hide first so Back feels instant; stop the TV player right after the screen has switched.
   document.body.classList.remove('playing');
