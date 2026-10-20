@@ -2,6 +2,7 @@ import layoutManager from 'components/layoutManager';
 import { getUserViewsQuery } from 'hooks/useUserViews';
 import globalize from 'lib/globalize';
 import { DEFAULT_SECTIONS, HomeSectionType } from 'types/homeSectionType';
+import browser from 'scripts/browser';
 import Dashboard from 'utils/dashboard';
 import { toApi } from 'utils/jellyfin-apiclient/compat';
 import { queryClient } from 'utils/query/queryClient';
@@ -32,6 +33,11 @@ function getAllSectionsToShow(userSettings, sectionCount) {
         let section = userSettings.get('homesection' + i) || getDefaultSection(i);
         if (section === 'folders') {
             section = getDefaultSection(0);
+        }
+
+        // JellyfinNX TV: skip rows this TV never uses (audio/book resume, recordings, live TV) to cut requests and cards
+        if (browser.tizen && [HomeSectionType.ResumeAudio, HomeSectionType.ResumeBook, HomeSectionType.ActiveRecordings, HomeSectionType.LiveTv].includes(section)) {
+            section = HomeSectionType.None;
         }
 
         sections.push(section);

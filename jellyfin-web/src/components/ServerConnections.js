@@ -2,9 +2,17 @@ import { MINIMUM_VERSION } from '@jellyfin/sdk/lib/versions';
 import { ConnectionManager, Credentials, ApiClient } from 'jellyfin-apiclient';
 
 import { appHost } from './apphost';
+import browser from '../scripts/browser';
 import Dashboard from '../utils/dashboard';
 import Events from '../utils/events.ts';
 import { setUserInfo } from '../scripts/settings/userSettings';
+
+// JellyfinNX TV (home network only): never run the 5.6 MB speed test; report a fixed 120 Mbps so files direct play.
+if (browser.tizen) {
+    ApiClient.prototype.detectBitrate = function () {
+        return Promise.resolve(120000000);
+    };
+}
 import appSettings from '../scripts/settings/appSettings';
 
 const normalizeImageOptions = options => {
@@ -51,6 +59,8 @@ class ServerConnections extends ConnectionManager {
         Events.on(this, 'apiclientcreated', (_e, apiClient) => {
             apiClient.getMaxBandwidth = getMaxBandwidth;
             apiClient.normalizeImageOptions = normalizeImageOptions;
+            // JellyfinNX TV: no background speed test after login (it downloaded ~5.6 MB on every start)
+            if (browser.tizen) apiClient.enableAutomaticBitrateDetection = false;
         });
     }
 

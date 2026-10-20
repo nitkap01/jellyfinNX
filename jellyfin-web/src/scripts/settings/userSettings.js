@@ -253,7 +253,7 @@ export class UserSettings {
             return this.set('fastFadein', val.toString(), false);
         }
 
-        return toBoolean(this.get('fastFadein', false), true);
+        return toBoolean(this.get('fastFadein', false), !browser.tizen); // JellyfinNX TV: no fade-in by default
     }
 
     /**
@@ -266,7 +266,7 @@ export class UserSettings {
             return this.set('blurhash', val.toString(), false);
         }
 
-        return toBoolean(this.get('blurhash', false), true);
+        return toBoolean(this.get('blurhash', false), !browser.tizen); // JellyfinNX TV: blurred placeholders are heavy on the TV CPU
     }
 
     /**

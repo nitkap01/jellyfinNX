@@ -845,8 +845,11 @@ function setInitialCollapsibleState(page, item, apiClient, context, user) {
         }
     });
 
-    renderCast(page, item, cast);
-    renderGuestCast(page, item, guestCast);
+    // JellyfinNX TV: draw cast a moment after the title and Play button, so the page is usable sooner
+    setTimeout(() => {
+        renderCast(page, item, cast);
+        renderGuestCast(page, item, guestCast);
+    }, browser.tizen ? 1200 : 0);
 
     if (item.PartCount && item.PartCount > 1) {
         page.querySelector('#additionalPartsCollapsible').classList.remove('hide');
@@ -1069,7 +1072,8 @@ function renderTagline(page, item) {
 }
 
 function renderDetails(page, item, apiClient, context) {
-    renderSimilarItems(page, item, context);
+    // JellyfinNX TV: "More like this" waits until the main page is drawn
+    setTimeout(() => renderSimilarItems(page, item, context), browser.tizen ? 1800 : 0);
     renderMoreFromSeason(page, item, apiClient);
     renderMoreFromArtist(page, item, apiClient);
     renderDirector(page, item, context);

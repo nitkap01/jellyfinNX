@@ -65,6 +65,9 @@ class AppSettings {
 
         if (isInNetwork && mediaType === 'Audio') {
             return true;
+        } else if (isInNetwork && browser.tizen) {
+            // JellyfinNX TV: home network only, so skip the speed test (it downloaded ~5.6 MB before every play)
+            return false;
         } else {
             return toBoolean(this.get(key), true);
         }
@@ -83,6 +86,9 @@ class AppSettings {
         if (isInNetwork && mediaType === 'Audio') {
             // return a huge number so that it always direct plays
             return 150000000;
+        } else if (isInNetwork && browser.tizen) {
+            // JellyfinNX TV on the home network: fixed 120 Mbps so files direct play without a speed test
+            return 120000000;
         } else {
             return parseInt(this.get(key) || '0', 10) || 1500000;
         }
