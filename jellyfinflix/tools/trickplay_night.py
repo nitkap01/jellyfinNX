@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Trickplay schedule (owner, 20 Oct 2026): rest the server for a day, then make previews only at night, in batches.
    python3 tools/trickplay_night.py pause   stop the job now and remove its automatic start (no runs until 'night')
-   python3 tools/trickplay_night.py night   from now on: run every night 01:00, stop by itself after 5 h; sitcoms included
+   python3 tools/trickplay_night.py night   from now on: run every night 01:00 IST, stop by itself after 5 h; sitcoms included
+   python3 tools/trickplay_night.py stop    stop the current run only (schedule stays)
    python3 tools/trickplay_night.py status  show the job, its schedule and how many movies/episodes have previews
 Reads the admin login from ~/.secrets/jellyfin_admin.txt at runtime; never prints it."""
 import json, sys, urllib.request
@@ -10,6 +11,7 @@ cfg = dict(l.split(': ', 1) for l in open('/home/nitin/.secrets/jellyfin_admin.t
 S = cfg['server'].rstrip('/')
 A = 'MediaBrowser Client="JellyfinFlix tools", Device="INDIE", DeviceId="indie-jflix-tools", Version="1.0"'
 HOUR = 36000000000  # 1 hour in .NET ticks
+START = int(19.5 * HOUR)  # the server (CT 105) runs on UTC: 19:30 UTC = 01:00 IST ('1 * HOUR' started at 06:30 IST on 22 Oct)
 
 def call(method, path, body=None, token=None):
     h = {'Content-Type': 'application/json', 'X-Emby-Authorization': A + (f', Token="{token}"' if token else '')}
@@ -35,8 +37,12 @@ elif mode == 'night':
             o['ExtractTrickplayImagesDuringLibraryScan'] = False
             call('POST', '/Library/VirtualFolders/LibraryOptions', {'Id': lib['ItemId'], 'LibraryOptions': o}, token=tok)
     call('POST', f"/ScheduledTasks/{task['Id']}/Triggers",
-         [{'Type': 'DailyTrigger', 'TimeOfDayTicks': 1 * HOUR, 'MaxRuntimeTicks': 5 * HOUR}], token=tok)
-    print('night batches on: every night 01:00, stops itself after 5 h; all 4 libraries')
+         [{'Type': 'DailyTrigger', 'TimeOfDayTicks': START, 'MaxRuntimeTicks': 5 * HOUR}], token=tok)
+    print('night batches on: every night 01:00 IST, stops itself after 5 h (06:00 IST); all 4 libraries')
+elif mode == 'stop':
+    if task.get('State') == 'Running':
+        call('DELETE', f"/ScheduledTasks/Running/{task['Id']}", token=tok)          # schedule stays
+    print('stopped the current run; nightly schedule unchanged')
 
 task = next(x for x in call('GET', '/ScheduledTasks', token=tok) if x['Id'] == task['Id'])
 uid = call('GET', '/Users/Me', token=tok)['Id']
