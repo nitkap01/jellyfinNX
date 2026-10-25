@@ -1,11 +1,12 @@
 [Unit]
-Description=TV Remote (JTV-13) - tvremote.home, INDIE :8496 (design preview stage)
+Description=TV Remote (JTV-13) - tvremote.home, INDIE :8496 -> Samsung TV 192.168.0.236
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 -m http.server 8496 --bind 0.0.0.0 --directory %h/projects/jellyfinNX/tvremote/designs
-Restart=on-failure
-RestartSec=5
+ExecStart=/usr/bin/python3 %h/projects/jellyfinNX/tvremote/server.py
+Environment=PORT=8496 TV_IP=192.168.0.236
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=default.target

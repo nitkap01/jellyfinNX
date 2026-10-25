@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0c0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TV Remote">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>TV Remote</title>
+<style>
+:root {
+  --bg: #0b0c0f; --key: #262a33; --key-hi: #343a47; --text: #eef0f4; --muted: #8b93a3; --line: #2c313b;
+  --ok: #34c77b; --warn: #f0b03c; --bad: #ff5b5b; --red: #ff4d4f; --netflix: #e50914; --prime: #00a8e1;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+/* the page never moves or zooms: fixed, no scrolling, no browser gestures */
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--text);
+  font: 15px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none;
+  touch-action: none; -webkit-text-size-adjust: 100%; }
+body { position: fixed; inset: 0; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; touch-action: none; }
+.wrap { position: absolute; inset: 0; max-width: 480px; margin: 0 auto; display: grid; grid-template-rows: auto auto 1fr auto; gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 14px); }
+
+.status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--muted); height: 20px; }
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status.connected i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.status.allow i, .status.connecting i { background: var(--warn); }
+.status.off i, .status.denied i, .status.offline i { background: var(--bad); }
+.status.allow { color: var(--warn); font-weight: 700; }
+
+.apps { display: flex; gap: 8px; }
+.app { flex: 1; height: 48px; border-radius: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  color: #fff; transition: transform .05s, filter .05s; }
+.app.netflix { background: #000; color: var(--netflix); border: 1px solid #3a0d10; letter-spacing: 1px; font-size: 15px; }
+.app.prime { background: #0f1b26; color: var(--prime); border: 1px solid #12324a; font-size: 14px; }
+.app.jflix { background: linear-gradient(135deg, #5b3df5, #b04cff); font-size: 14px; }
+.down { transform: scale(.94); filter: brightness(1.3); }
+
+.main { display: grid; grid-template-columns: 66px 1fr 66px; gap: 10px; min-height: 0; }
+.slide { background: var(--key); border-radius: 33px; position: relative; display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between; padding: 16px 0; color: var(--muted); font-weight: 700; overflow: hidden; }
+.slide b { font-size: 26px; font-weight: 300; color: var(--text); line-height: 1; }
+.slide span { font-size: 11px; letter-spacing: .6px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.slide.active { background: var(--key-hi); }
+.slide .knob { position: absolute; left: 9px; right: 9px; height: 50px; border-radius: 25px; background: #ffffff18;
+  top: calc(50% - 25px); transition: top .12s; pointer-events: none; }
+.slide.active .knob { transition: none; background: #ffffff2a; }
+
+.pad { position: relative; background: radial-gradient(120% 80% at 50% 0%, #22262f, #15171d); border: 1px solid var(--line);
+  border-radius: 24px; overflow: hidden; }
+.pad .hint { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 11.5px; color: var(--muted); pointer-events: none; }
+.pad .dot { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+  background: radial-gradient(circle, #ffffff45, #ffffff00 70%); pointer-events: none; opacity: 0; }
+.pad.touch .dot { opacity: 1; }
+.pad.flash { box-shadow: inset 0 0 0 2px #ffffff30; }
+.mode { display: flex; gap: 4px; background: #0004; border-radius: 999px; padding: 3px; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); }
+.mode button { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; color: var(--muted); }
+.mode button.on { background: #ffffff1f; color: var(--text); }
+
+.nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.k { height: 58px; border-radius: 29px; background: var(--key); display: flex; align-items: center; justify-content: center; transition: transform .05s; }
+.k.down { background: var(--key-hi); filter: none; }
+.k svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.k.power { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="status connecting" id="status"><i></i><span id="stxt">Connecting…</span></div>
+  <div class="apps">
+    <button class="app netflix" data-app="netflix">NETFLIX</button>
+    <button class="app jflix" data-app="jellyfinflix">JellyfinFlix</button>
+    <button class="app prime" data-app="prime">prime video</button>
+  </div>
+  <div class="main">
+    <div class="slide" data-slide="CH"><b>+</b><span>CHANNEL</span><b>−</b><div class="knob"></div></div>
+    <div class="pad" id="pad">
+      <div class="mode"><button class="on" data-mode="arrows">Arrows</button><button data-mode="pointer">Pointer</button></div>
+      <div class="hint" id="hint">Swipe to move · tap = OK · hold = back</div>
+      <div class="dot" id="dot"></div>
+    </div>
+    <div class="slide" data-slide="VOL"><b>+</b><span>VOLUME</span><b>−</b><div class="knob"></div></div>
+  </div>
+  <div class="nav">
+    <button class="k" data-key="KEY_RETURN" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+    <button class="k" data-key="KEY_HOME" aria-label="Home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
+    <button class="k" data-key="PLAYPAUSE" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path d="m6 4 8 8-8 8z"/><path d="M17 5v14M21 5v14"/></svg></button>
+    <button class="k power" data-key="KEY_POWER" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+  </div>
+</div>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const buzz = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+// ---------- never zoom, never scroll (iOS + Android) ----------
+const stop = (e) => { if (e.cancelable) e.preventDefault(); };
+["gesturestart", "gesturechange", "gestureend", "dblclick", "contextmenu", "selectstart"].forEach((t) => document.addEventListener(t, stop, { passive: false }));
+document.addEventListener("touchmove", stop, { passive: false });
+document.addEventListener("touchstart", (e) => { if (e.touches.length > 1) stop(e); }, { passive: false });
+document.addEventListener("touchend", stop, { passive: false }); // no synthetic click => no double-tap zoom
+document.addEventListener("wheel", (e) => { if (e.ctrlKey) stop(e); }, { passive: false });
+
+// ---------- one always-open connection ----------
+const TXT = { connected: "TV connected", allow: "Press “Allow” on the TV", connecting: "Connecting…",
+  off: "TV is off or not reachable", denied: "TV refused — allow it in TV Settings › Device Connection", offline: "No connection to INDIE — retrying" };
+let ws, wsOpen = false, retry = 0;
+function setStatus(s) { $("#status").className = "status " + s; $("#stxt").textContent = TXT[s] || s; }
+function connectWS() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { wsOpen = true; retry = 0; };
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.tv) setStatus(m.tv); };
+  ws.onclose = () => { wsOpen = false; setStatus("offline"); setTimeout(connectWS, Math.min(2000, 200 * ++retry)); };
+}
+connectWS();
+document.addEventListener("visibilitychange", () => { if (!document.hidden && (!ws || ws.readyState > 1)) connectWS(); });
+const send = (o) => { if (wsOpen) ws.send(JSON.stringify(o)); };
+let playing = true;
+const key = (k) => {
+  if (k === "PLAYPAUSE") { k = playing ? "KEY_PAUSE" : "KEY_PLAY"; playing = !playing; }
+  send({ k });
+};
+
+// ---------- buttons: act the moment the finger touches ----------
+document.addEventListener("pointerdown", (e) => {
+  const b = e.target.closest("[data-key],[data-app]"); if (!b) return;
+  b.classList.add("down"); buzz();
+  if (b.dataset.app) send({ app: b.dataset.app }); else key(b.dataset.key);
+  const up = () => { b.classList.remove("down"); removeEventListener("pointerup", up); removeEventListener("pointercancel", up); };
+  addEventListener("pointerup", up); addEventListener("pointercancel", up);
+});
+
+// ---------- side bars: drag up = +, down = −; further = faster ----------
+$$("[data-slide]").forEach((s) => {
+  let y0, off = 0, timer; const knob = s.querySelector(".knob"), kind = s.dataset.slide;
+  const keys = kind === "VOL" ? ["KEY_VOLUP", "KEY_VOLDOWN"] : ["KEY_CHUP", "KEY_CHDOWN"];
+  const half = () => s.getBoundingClientRect().height / 2 - 34;
+  const tick = () => {
+    const f = Math.max(-1, Math.min(1, off / half()));
+    if (Math.abs(f) > 0.18) { buzz(5); send({ k: f < 0 ? keys[0] : keys[1] }); }
+    timer = setTimeout(tick, Math.abs(f) > 0.75 ? 90 : Math.abs(f) > 0.45 ? 160 : 260);
+  };
+  s.addEventListener("pointerdown", (e) => {
+    s.setPointerCapture(e.pointerId); y0 = e.clientY; s.classList.add("active"); buzz();
+    // a tap on the + or − end = one step straight away
+    const r = s.getBoundingClientRect(), rel = (e.clientY - r.top) / r.height;
+    off = rel < 0.22 ? -half() * 0.3 : rel > 0.78 ? half() * 0.3 : 0;
+    if (off) send({ k: off < 0 ? keys[0] : keys[1] });
+    timer = setTimeout(tick, 380);
+  });
+  s.addEventListener("pointermove", (e) => {
+    if (!s.classList.contains("active")) return;
+    off = Math.max(-half(), Math.min(half(), e.clientY - y0));
+    knob.style.top = `calc(50% - 25px + ${off}px)`;
+  });
+  const end = () => { s.classList.remove("active"); clearTimeout(timer); off = 0; knob.style.top = "calc(50% - 25px)"; };
+  s.addEventListener("pointerup", end); s.addEventListener("pointercancel", end); s.addEventListener("lostpointercapture", end);
+});
+
+// ---------- touch pad ----------
+const pad = $("#pad"), dot = $("#dot");
+let mode = "arrows";
+try { mode = localStorage.getItem("tvremote-mode") || "arrows"; } catch (e) {}
+function setMode(m) {
+  mode = m; $$(".mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+  $("#hint").textContent = m === "arrows" ? "Swipe to move · tap = OK · hold = back" : "Move like a mouse · tap = click";
+  try { localStorage.setItem("tvremote-mode", m); } catch (e) {}
+}
+setMode(mode);
+$$(".mode button").forEach((b) => b.addEventListener("pointerdown", (e) => { e.stopPropagation(); buzz(); setMode(b.dataset.mode); }));
+
+const STEP = 36;
+let sx, sy, lx, ly, ax, ay, t0, moved, holdT, mvx = 0, mvy = 0, raf = 0;
+pad.addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".mode")) return;
+  pad.setPointerCapture(e.pointerId); pad.classList.add("touch");
+  const r = pad.getBoundingClientRect(); dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px";
+  sx = lx = e.clientX; sy = ly = e.clientY; ax = ay = 0; t0 = performance.now(); moved = false;
+  holdT = setTimeout(() => { if (!moved && mode === "arrows") { moved = true; buzz(25); send({ k: "KEY_RETURN" }); } }, 550);
+});
+pad.addEventListener("pointermove", (e) => {
+  if (!pad.classList.contains("touch")) return;
+  const r = pad.getBoundingClientRect(); dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px";
+  const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+  if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) > 8) { moved = true; clearTimeout(holdT); }
+  if (mode === "pointer") {
+    mvx += dx * 2; mvy += dy * 2;
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (mvx || mvy) send({ m: [Math.round(mvx), Math.round(mvy)] }); mvx = mvy = 0; });
+    return;
+  }
+  ax += dx; ay += dy;
+  // move along the stronger direction only, so a sideways swipe never jumps a row
+  if (Math.abs(ax) > Math.abs(ay)) ay *= 0.6; else ax *= 0.6;
+  while (Math.abs(ax) >= STEP) { send({ k: ax > 0 ? "KEY_RIGHT" : "KEY_LEFT" }); ax -= Math.sign(ax) * STEP; buzz(4); }
+  while (Math.abs(ay) >= STEP) { send({ k: ay > 0 ? "KEY_DOWN" : "KEY_UP" }); ay -= Math.sign(ay) * STEP; buzz(4); }
+});
+const padEnd = () => {
+  if (!pad.classList.contains("touch")) return;
+  pad.classList.remove("touch"); clearTimeout(holdT);
+  if (!moved && performance.now() - t0 < 400) {
+    buzz(12); pad.classList.add("flash"); setTimeout(() => pad.classList.remove("flash"), 90);
+    send(mode === "pointer" ? { click: 1 } : { k: "KEY_ENTER" });
+  }
+};
+pad.addEventListener("pointerup", padEnd); pad.addEventListener("pointercancel", padEnd);
+</script>
+</body>
+</html>
