@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0c0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>TV Remote Designs</title>
+<style>
+:root {
+  --bg: #0b0c0f; --body: #17191f; --body2: #1f222a; --key: #262a33; --key-hi: #323744; --text: #eef0f4;
+  --muted: #8b93a3; --line: #2c313b; --accent: #3d8bff; --ok: #34c77b;
+  --netflix: #e50914; --prime: #00a8e1; --jflix: #7b5cff; --red: #ff4d4f;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+.wrap { max-width: 440px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 12px); }
+
+/* design switcher */
+.switch { display: flex; gap: 6px; background: var(--body); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.switch button { flex: 1; padding: 8px 4px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.switch button.on { background: var(--text); color: var(--bg); }
+.caption { color: var(--muted); font-size: 12.5px; margin: 8px 4px 10px; min-height: 34px; }
+
+/* TV preview (demo only) */
+.tv { background: #000; border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 12px; position: relative; overflow: hidden; }
+.tv .row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.tv .p { aspect-ratio: 2/3; border-radius: 4px; outline: 2px solid transparent; transition: outline-color .08s, transform .08s; }
+.tv .p.f { outline-color: #fff; transform: scale(1.06); }
+.tv .lbl { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #aaa; background: #000a; padding: 1px 6px; border-radius: 6px; }
+.tv .cur { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #000;
+  left: 50%; top: 50%; display: none; pointer-events: none; }
+.tv.pointer .cur { display: block; }
+
+/* toast: what would be sent */
+.toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); transform: translate(-50%, -300%);
+  background: var(--text); color: var(--bg); font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 999px;
+  transition: transform .12s; z-index: 9; pointer-events: none; }
+.toast.show { transform: translate(-50%, 0); }
+
+/* shared keys: fire on press-down, instant visual */
+.k { background: var(--key); border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  font-weight: 600; transition: transform .05s, background .05s; }
+.k.down { transform: scale(.94); background: var(--key-hi); }
+.k svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.app { border-radius: 14px; font-weight: 800; letter-spacing: .2px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.app.netflix { background: #000; color: var(--netflix); border: 1px solid #2a0a0b; font-size: 17px; letter-spacing: 1px; }
+.app.prime { background: #0f1b26; color: var(--prime); border: 1px solid #12324a; font-size: 14px; }
+.app.jflix { background: linear-gradient(135deg, #5b3df5, #b04cff); font-size: 14px; }
+.app.down { transform: scale(.94); filter: brightness(1.25); }
+
+/* touch pad */
+.pad { position: relative; background: radial-gradient(120% 90% at 50% 0%, #20242d, #15171d); border: 1px solid var(--line);
+  border-radius: 22px; touch-action: none; overflow: hidden; }
+.pad .hint { position: absolute; inset: auto 0 10px; text-align: center; font-size: 11.5px; color: var(--muted); pointer-events: none; }
+.pad .dot { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
+  background: radial-gradient(circle, #ffffff40, #ffffff00 70%); pointer-events: none; opacity: 0; transition: opacity .15s; }
+.pad.touch .dot { opacity: 1; }
+.mode { display: flex; gap: 4px; background: #0003; border-radius: 999px; padding: 3px; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); }
+.mode button { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; color: var(--muted); }
+.mode button.on { background: #ffffff1c; color: var(--text); }
+
+.rocker { background: var(--key); border-radius: 26px; display: flex; flex-direction: column; overflow: hidden; }
+.rocker button { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 300; }
+.rocker button.down { background: var(--key-hi); }
+.rocker span { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .5px; }
+
+.d { display: none; flex: 1; flex-direction: column; gap: 12px; }
+.d.on { display: flex; }
+
+/* A — Samsung classic */
+.A .shell { background: linear-gradient(180deg, #1c1e24, #121318); border: 1px solid #2a2d35; border-radius: 34px;
+  padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: inset 0 1px 0 #ffffff10; }
+.A .top { display: flex; justify-content: space-between; align-items: center; }
+.A .pwr { width: 44px; height: 44px; border-radius: 50%; color: var(--red); }
+.A .ring { position: relative; width: 236px; height: 236px; margin: 2px auto; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #2b2f38, #1d2027); border: 1px solid #343944; touch-action: none; }
+.A .ring .ok { position: absolute; inset: 70px; border-radius: 50%; background: #121419; border: 1px solid #343944;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted); font-size: 13px; }
+.A .ring .ar { position: absolute; color: var(--muted); font-size: 18px; }
+.A .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.A .row3 .k { height: 46px; border-radius: 23px; }
+.A .rk { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 12px; align-items: stretch; }
+.A .rk .rocker { height: 120px; }
+.A .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.A .apps .app { height: 46px; border-radius: 23px; font-size: 13px; }
+
+/* B — Touchpad first */
+.B .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.B .apps .app { height: 64px; flex-direction: column; gap: 2px; }
+.B .apps .app small { font-size: 10px; font-weight: 600; opacity: .7; letter-spacing: 0; }
+.B .pad { flex: 1; min-height: 270px; }
+.B .nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.B .nav .k { height: 50px; }
+.B .bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.B .h-rocker { display: flex; background: var(--key); border-radius: 18px; overflow: hidden; height: 56px; align-items: stretch; }
+.B .h-rocker button { width: 56px; font-size: 24px; font-weight: 300; }
+.B .h-rocker button.down { background: var(--key-hi); }
+.B .h-rocker span { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+
+/* C — One thumb */
+.C .apps { display: flex; gap: 8px; }
+.C .apps .app { flex: 1; height: 42px; border-radius: 21px; font-size: 13px; }
+.C .main { flex: 1; display: grid; grid-template-columns: 64px 1fr 64px; gap: 10px; min-height: 360px; }
+.C .slide { background: var(--key); border-radius: 32px; position: relative; touch-action: none; display: flex;
+  flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 0; color: var(--muted); font-weight: 700; }
+.C .slide b { font-size: 22px; font-weight: 300; color: var(--text); }
+.C .slide span { font-size: 10.5px; letter-spacing: .5px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.C .slide.active { background: var(--key-hi); }
+.C .slide .knob { position: absolute; left: 8px; right: 8px; height: 48px; border-radius: 24px; background: #ffffff14;
+  top: calc(50% - 24px); transition: top .12s; pointer-events: none; }
+.C .pad { height: 100%; }
+.C .nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.C .nav .k { height: 54px; border-radius: 27px; }
+
+.foot { color: var(--muted); font-size: 12px; margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; }
+.foot b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="wrap">
+  <div class="switch" id="switch">
+    <button data-d="A" class="on">A · Samsung</button>
+    <button data-d="B">B · Touchpad</button>
+    <button data-d="C">C · One thumb</button>
+  </div>
+  <div class="caption" id="caption"></div>
+
+  <div class="tv" id="tv"><div class="row" id="posters"></div><div class="cur" id="cur"></div><span class="lbl">TV preview (demo)</span></div>
+
+  <!-- A: looks like the real Samsung remote; the round pad is touch-sensitive -->
+  <section class="d A on" data-d="A">
+    <div class="shell">
+      <div class="top">
+        <button class="k pwr" data-cmd="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+        <span style="font-size:12px;color:var(--muted);font-weight:700;letter-spacing:2px">SAMSUNG</span>
+        <button class="k pwr" style="color:var(--muted)" data-cmd="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      </div>
+      <div class="ring pad" data-pad>
+        <span class="ar" style="top:12px;left:50%;transform:translateX(-50%)">▲</span>
+        <span class="ar" style="bottom:12px;left:50%;transform:translateX(-50%)">▼</span>
+        <span class="ar" style="left:14px;top:50%;transform:translateY(-50%)">◀</span>
+        <span class="ar" style="right:14px;top:50%;transform:translateY(-50%)">▶</span>
+        <div class="ok">OK</div>
+        <div class="dot"></div>
+      </div>
+      <div class="row3">
+        <button class="k" data-cmd="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+        <button class="k" data-cmd="Home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
+        <button class="k" data-cmd="Play / Pause"><svg viewBox="0 0 24 24"><path d="m6 4 8 8-8 8z"/><path d="M17 5v14M21 5v14"/></svg></button>
+      </div>
+      <div class="rk">
+        <div class="rocker"><button data-cmd="Volume +" data-repeat>+</button><span>VOL</span><button data-cmd="Volume −" data-repeat>−</button></div>
+        <div style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+          <button class="k" style="height:50px;border-radius:25px" data-cmd="Mute"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg></button>
+        </div>
+        <div class="rocker"><button data-cmd="Channel +" data-repeat>⌃</button><span>CH</span><button data-cmd="Channel −" data-repeat>⌄</button></div>
+      </div>
+      <div class="apps">
+        <button class="app netflix" data-cmd="Open Netflix">NETFLIX</button>
+        <button class="app prime" data-cmd="Open Prime Video">prime video</button>
+        <button class="app jflix" data-cmd="Open JellyfinFlix">JellyfinFlix</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- B: big touchpad in the middle, apps on top, rockers at the bottom -->
+  <section class="d B" data-d="B">
+    <div class="apps">
+      <button class="app netflix" data-cmd="Open Netflix">NETFLIX</button>
+      <button class="app jflix" data-cmd="Open JellyfinFlix">JellyfinFlix<small>home movies</small></button>
+      <button class="app prime" data-cmd="Open Prime Video">prime video</button>
+    </div>
+    <div class="pad" data-pad>
+      <div class="mode"><button class="on" data-mode="arrows">Arrows</button><button data-mode="pointer">Mouse pointer</button></div>
+      <div class="hint">Swipe to move · tap to select · hold to go back</div>
+      <div class="dot"></div>
+    </div>
+    <div class="nav">
+      <button class="k" data-cmd="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="k" data-cmd="Home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
+      <button class="k" data-cmd="Play / Pause"><svg viewBox="0 0 24 24"><path d="m6 4 8 8-8 8z"/><path d="M17 5v14M21 5v14"/></svg></button>
+      <button class="k" style="color:var(--red)" data-cmd="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+    </div>
+    <div class="bottom">
+      <div class="h-rocker"><button data-cmd="Volume −" data-repeat>−</button><span>VOL</span><button data-cmd="Volume +" data-repeat>+</button></div>
+      <div class="h-rocker"><button data-cmd="Channel −" data-repeat>−</button><span>CH</span><button data-cmd="Channel +" data-repeat>+</button></div>
+    </div>
+  </section>
+
+  <!-- C: one-handed; drag the side bars for volume / channel, pad in the middle -->
+  <section class="d C" data-d="C">
+    <div class="apps">
+      <button class="app netflix" data-cmd="Open Netflix">NETFLIX</button>
+      <button class="app jflix" data-cmd="Open JellyfinFlix">JellyfinFlix</button>
+      <button class="app prime" data-cmd="Open Prime Video">prime</button>
+    </div>
+    <div class="main">
+      <div class="slide" data-slide="Channel"><b>+</b><span>CHANNEL</span><b>−</b><div class="knob"></div></div>
+      <div class="pad" data-pad>
+        <div class="mode"><button class="on" data-mode="arrows">Arrows</button><button data-mode="pointer">Pointer</button></div>
+        <div class="hint">Swipe · tap = OK</div>
+        <div class="dot"></div>
+      </div>
+      <div class="slide" data-slide="Volume"><b>+</b><span>VOLUME</span><b>−</b><div class="knob"></div></div>
+    </div>
+    <div class="nav">
+      <button class="k" data-cmd="Back"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="k" data-cmd="Home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
+      <button class="k" data-cmd="Play / Pause"><svg viewBox="0 0 24 24"><path d="m6 4 8 8-8 8z"/><path d="M17 5v14M21 5v14"/></svg></button>
+      <button class="k" style="color:var(--red)" data-cmd="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+    </div>
+  </section>
+
+  <div class="foot"><b>Design preview only — nothing is sent to the TV yet.</b> Every press shows what it would send.
+    How it will stay snappy: buttons fire the moment your finger touches (not on release), one always-open connection
+    phone → INDIE → TV (no page loads), a short buzz on every press, and it can be added to the home screen as a full-screen app.</div>
+</div>
+
+<script>
+const CAPTIONS = {
+  A: "Looks like your real Samsung remote. The round pad is touch-sensitive: swipe on it to move, tap the middle for OK.",
+  B: "Built around a big touchpad, like a laptop. Apps on top, volume and channel at the bottom. Switch between arrows and a mouse pointer.",
+  C: "For one hand. Drag the right bar up/down for volume, the left bar for channel; the pad in the middle moves around."
+};
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const buzz = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+// --- demo TV preview: 2 rows of posters with a focus ring
+const COLORS = ["#7b2ff7,#f107a3", "#00c6ff,#0072ff", "#f7971e,#ffd200", "#11998e,#38ef7d", "#fc466b,#3f5efb", "#c94b4b,#4b134f",
+  "#355c7d,#c06c84", "#ee0979,#ff6a00", "#1d976c,#93f9b9", "#8360c3,#2ebf91", "#ff5f6d,#ffc371", "#4568dc,#b06ab3"];
+$("#posters").innerHTML = COLORS.map((c) => `<div class="p" style="background:linear-gradient(160deg,${c})"></div>`).join("");
+let focus = 0;
+function showFocus() { $$("#posters .p").forEach((p, i) => p.classList.toggle("f", i === focus)); }
+function moveFocus(dir) {
+  const cols = 6, n = COLORS.length, r = Math.floor(focus / cols), c = focus % cols;
+  if (dir === "right" && c < cols - 1) focus++;
+  if (dir === "left" && c > 0) focus--;
+  if (dir === "down" && focus + cols < n) focus += cols;
+  if (dir === "up" && r > 0) focus -= cols;
+  showFocus();
+}
+showFocus();
+
+let toastT;
+function send(label) {
+  const t = $("#toast"); t.textContent = label; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 700);
+}
+
+// --- buttons: act on press-down; hold to repeat (volume / channel)
+document.addEventListener("pointerdown", (e) => {
+  const b = e.target.closest("[data-cmd]"); if (!b) return;
+  e.preventDefault(); b.classList.add("down"); buzz(); send(b.dataset.cmd);
+  if (b.dataset.cmd === "Play / Pause" || b.dataset.cmd.startsWith("Open")) { focus = 0; showFocus(); }
+  if (b.hasAttribute("data-repeat")) {
+    let n = 0; b._rep = setTimeout(function rep() { n++; buzz(5); send(b.dataset.cmd + " ×" + (n + 1)); b._rep = setTimeout(rep, n > 4 ? 70 : 140); }, 380);
+  }
+  const up = () => { b.classList.remove("down"); clearTimeout(b._rep); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+  window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+}, { passive: false });
+
+// --- touch pads: swipe = arrow steps (faster swipe = more steps), tap = OK, hold = Back; or pointer mode
+$$("[data-pad]").forEach((pad) => {
+  let sx, sy, lx, ly, acc = { x: 0, y: 0 }, t0, moved, holdT;
+  const STEP = 34;
+  const dot = $(".dot", pad);
+  const modeOf = () => ($(".mode .on", pad) || { dataset: { mode: "arrows" } }).dataset.mode;
+  $$(".mode button", pad).forEach((m) => m.addEventListener("pointerdown", (e) => {
+    e.stopPropagation(); $$(".mode button", pad).forEach((x) => x.classList.toggle("on", x === m));
+    $("#tv").classList.toggle("pointer", m.dataset.mode === "pointer"); buzz(); send(m.dataset.mode === "pointer" ? "Mouse pointer on" : "Arrows on");
+  }));
+  pad.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".mode")) return;
+    pad.setPointerCapture(e.pointerId); pad.classList.add("touch");
+    const r = pad.getBoundingClientRect(); sx = lx = e.clientX; sy = ly = e.clientY; t0 = performance.now(); moved = false;
+    acc = { x: 0, y: 0 }; dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px";
+    holdT = setTimeout(() => { if (!moved) { buzz(20); send("Back (hold)"); moved = true; } }, 550);
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (!pad.classList.contains("touch")) return;
+    const r = pad.getBoundingClientRect(); dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px";
+    const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) > 8) { moved = true; clearTimeout(holdT); }
+    if (modeOf() === "pointer") {
+      const cur = $("#cur"), tv = $("#tv").getBoundingClientRect();
+      const x = Math.max(0, Math.min(tv.width - 12, (parseFloat(cur.style.left) || tv.width / 2) + dx * 1.6));
+      const y = Math.max(0, Math.min(tv.height - 12, (parseFloat(cur.style.top) || tv.height / 2) + dy * 1.6));
+      cur.style.left = x + "px"; cur.style.top = y + "px"; return;
+    }
+    acc.x += dx; acc.y += dy;
+    while (Math.abs(acc.x) >= STEP) { const d = acc.x > 0 ? "right" : "left"; acc.x -= Math.sign(acc.x) * STEP; buzz(4); moveFocus(d); send(d === "right" ? "▶ Right" : "◀ Left"); }
+    while (Math.abs(acc.y) >= STEP) { const d = acc.y > 0 ? "down" : "up"; acc.y -= Math.sign(acc.y) * STEP; buzz(4); moveFocus(d); send(d === "down" ? "▼ Down" : "▲ Up"); }
+  });
+  const end = () => {
+    if (!pad.classList.contains("touch")) return;
+    pad.classList.remove("touch"); clearTimeout(holdT);
+    if (!moved && performance.now() - t0 < 350) { buzz(12); send(modeOf() === "pointer" ? "Click" : "OK"); }
+  };
+  pad.addEventListener("pointerup", end); pad.addEventListener("pointercancel", end);
+});
+
+// --- C: side bars; drag up/down from the middle = repeated + / −, faster the further you drag
+$$("[data-slide]").forEach((s) => {
+  let y0, tick, off = 0; const knob = $(".knob", s), name = s.dataset.slide;
+  const loop = () => {
+    const h = s.getBoundingClientRect().height, f = Math.max(-1, Math.min(1, off / (h / 2 - 30)));
+    if (Math.abs(f) > 0.15) { buzz(5); send(name + (f < 0 ? " +" : " −")); }
+    tick = setTimeout(loop, Math.abs(f) > 0.7 ? 80 : 200);
+  };
+  s.addEventListener("pointerdown", (e) => { s.setPointerCapture(e.pointerId); y0 = e.clientY; off = 0; s.classList.add("active"); buzz(); loop(); });
+  s.addEventListener("pointermove", (e) => {
+    if (!s.classList.contains("active")) return;
+    const h = s.getBoundingClientRect().height; off = Math.max(-(h / 2 - 30), Math.min(h / 2 - 30, e.clientY - y0));
+    knob.style.top = `calc(50% - 24px + ${off}px)`;
+  });
+  const end = () => { s.classList.remove("active"); clearTimeout(tick); knob.style.top = "calc(50% - 24px)"; };
+  s.addEventListener("pointerup", end); s.addEventListener("pointercancel", end);
+});
+
+// --- switch designs (remember the last one)
+function pick(d) {
+  $$("#switch button").forEach((b) => b.classList.toggle("on", b.dataset.d === d));
+  $$(".d").forEach((x) => x.classList.toggle("on", x.dataset.d === d));
+  $("#caption").textContent = CAPTIONS[d];
+  $("#tv").classList.remove("pointer");
+  try { localStorage.setItem("tvremote-design", d); } catch (e) {}
+}
+$("#switch").addEventListener("pointerdown", (e) => { const b = e.target.closest("button"); if (b) { buzz(); pick(b.dataset.d); } });
+let saved = "A"; try { saved = localStorage.getItem("tvremote-design") || "A"; } catch (e) {}
+pick(saved);
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+</script>
+</body>
+</html>
