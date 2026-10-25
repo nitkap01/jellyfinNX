@@ -39,6 +39,8 @@ class TV:
         self.phones = set()
         self.apps = {}
         self.ime = False  # the TV's own on-screen keyboard is open (e.g. Netflix search)
+        self.app_ws = None   # JellyfinFlix on the TV keeps a WebSocket to /app; commands for it go there
+        self.pending = None  # (time, command) waiting for JellyfinFlix to start and connect
 
     def token(self):
         try:
@@ -135,24 +137,31 @@ class TV:
                 "Cmd": base64.b64encode(text.encode()).decode(), "DataOfCmd": "base64", "TypeOfRemote": "SendInputString"}}))
             await self.ws.send(json.dumps({"method": "ms.remote.control", "params": {"TypeOfRemote": "SendInputEnd"}}))
             return True
-        return await self.launch("jellyfinflix", "search=" + text)
+        return await self.to_app({"search": text})
 
-    async def launch(self, name, meta=None):
+    async def to_app(self, cmd):
+        """Give JellyfinFlix a command; start it first if it is not running (it connects within a few seconds)."""
+        if self.app_ws:
+            try:
+                await self.app_ws.send(json.dumps(cmd))
+                await self.launch("jellyfinflix")  # bring it to the front if another app is showing
+                return True
+            except Exception:
+                self.app_ws = None
+        self.pending = (time.time(), cmd)
+        return await self.launch("jellyfinflix")
+
+    async def launch(self, name):
+        """Open an app. This TV (2021 AU7600) ignores the WebSocket launch event, so use its plain launch call."""
         app = APPS.get(name)
         if not app:
             return False
-        if self.ws:
-            await self.ws.send(json.dumps({"method": "ms.channel.emit", "params": {
-                "event": "ed.apps.launch", "to": "host", "data": dict({"appId": app, "action_type": "DEEP_LINK"},
-                                                                      **({"metaTag": meta} if meta else {}))}}))
-            return True
-        # TV link down: try the plain launch call once
         def post():
-            urllib.request.urlopen(urllib.request.Request(f"http://{TV_IP}:8001/api/v2/applications/{app}", method="POST"), timeout=3)
+            urllib.request.urlopen(urllib.request.Request(f"http://{TV_IP}:8001/api/v2/applications/{app}", method="POST"), timeout=4).read()
         try:
             await asyncio.to_thread(post); return True
-        except Exception:
-            return False
+        except Exception as e:
+            log.info("launch %s: %s", name, type(e).__name__); return False
 
 
 tv = TV()
@@ -178,7 +187,25 @@ def jf_find(q):
                 if (i.get("ImageTags") or {}).get("Primary") else None)} for i in items]}
 
 
+async def jflix(ws):
+    """JellyfinFlix (TV app) link: receives open/search commands."""
+    tv.app_ws = ws
+    log.info("jellyfinflix connected")
+    if tv.pending and time.time() - tv.pending[0] < 30:
+        await ws.send(json.dumps(tv.pending[1]))
+    tv.pending = None
+    try:
+        async for _ in ws:
+            pass
+    finally:
+        if tv.app_ws is ws:
+            tv.app_ws = None
+        log.info("jellyfinflix left")
+
+
 async def phone(ws):
+    if ws.request.path.startswith("/app"):
+        return await jflix(ws)
     tv.phones.add(ws)
     await ws.send(json.dumps({"tv": tv.status}))
     try:
@@ -197,7 +224,7 @@ async def phone(ws):
                 res["find"] = m.get("n")
                 await ws.send(json.dumps(res)); continue
             elif isinstance(m.get("open"), str) and m["open"].isalnum():
-                ok = await tv.launch("jellyfinflix", "item=" + m["open"])
+                ok = await tv.to_app({"open": m["open"]})
             elif isinstance(m.get("search"), str) and m["search"].strip():
                 ok = await tv.search(m["search"].strip()[:80])
             elif "app" in m:
@@ -218,7 +245,7 @@ async def phone(ws):
 
 
 def http(conn, req):
-    if req.path.startswith("/ws"):
+    if req.path.startswith("/ws") or req.path.startswith("/app"):
         return None  # WebSocket upgrade
     path = req.path.split("?")[0]
     base = WEB

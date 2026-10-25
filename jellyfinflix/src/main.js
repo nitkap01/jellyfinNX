@@ -90,36 +90,31 @@ if (last) {
 } else {
   app.go('profiles');
 }
-// Phone remote (tvremote.home, JTV-13) opens the app with "item=<id>" (show that movie / show) or "search=<words>"
-// (Samsung DEEP_LINK -> app control data). Works on a fresh start and when the app is already running.
-function remoteSearch() {
-  let term = '', item = '';
-  try {
-    const req = window.tizen.application.getCurrentApplication().getRequestedAppControl();
-    const data = (req && req.appControl && req.appControl.data) || [];
-    for (const d of data) for (let v of (d.value || [])) {
-      if (typeof v !== 'string') continue;
-      if (v.charAt(0) === '{') { try { const j = JSON.parse(v); v = String(j.values || j.PAYLOAD || j.search || v); } catch (e) { /* keep raw */ } }
-      const m = /search=([\s\S]*)$/.exec(v);
-      if (m) term = m[1].trim();
-      const i = /item=([0-9a-fA-F]{16,64})/.exec(v);
-      if (i) item = i[1];
-    }
-  } catch (e) { return; }
+// Phone remote (tvremote.home, JTV-13): the remote server on INDIE sends {open: itemId} or {search: words} over a
+// WebSocket that this app keeps open while it runs (the TV itself cannot pass data to a side-loaded app).
+const REMOTE = 'ws://192.168.0.198:8496/app';
+let remoteWs = null, remoteT = 0;
+function remoteCmd(m) {
   if (!S.token) return;
-  if (item) {
-    log('remote open', { item });
-    get('/Users/{U}/Items/' + item, {}, 0).then((it) => openDetails(slim(it))).catch((e) => log('remote open failed', { item, e: String(e) }));
-    return;
+  if (m.open) {
+    log('remote open', { item: m.open });
+    get('/Users/{U}/Items/' + m.open, {}, 0).then((it) => openDetails(slim(it))).catch((e) => log('remote open failed', { e: String(e) }));
+  } else if (m.search) {
+    log('remote search', { term: m.search });
+    app.go('search');
+    const s = app.screen('search');
+    if (s && s.setQuery) s.setQuery(String(m.search).slice(0, 80));
   }
-  if (!term) return;
-  log('remote search', { term });
-  app.go('search');
-  const s = app.screen('search');
-  if (s && s.setQuery) s.setQuery(term.slice(0, 80));
 }
-window.addEventListener('appcontrol', remoteSearch);
-setTimeout(remoteSearch, 0);
+function remoteLink() {
+  clearTimeout(remoteT);
+  if (remoteWs && remoteWs.readyState < 2) return;
+  try { remoteWs = new WebSocket(REMOTE); } catch (e) { remoteT = setTimeout(remoteLink, 5000); return; }
+  remoteWs.onmessage = (e) => { try { remoteCmd(JSON.parse(e.data)); } catch (err) { /* ignore */ } };
+  remoteWs.onclose = () => { remoteWs = null; remoteT = setTimeout(remoteLink, 5000); };
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) remoteLink(); });
+setTimeout(remoteLink, 500);
 mark('shell');
 // Test hooks (used by the CDP scripts in test/): reset to Home top.
 window.__jfApp = app;
