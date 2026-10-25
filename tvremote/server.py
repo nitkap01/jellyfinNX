@@ -5,7 +5,7 @@ Snappy by design: the phone keeps one WebSocket open to this server, and this se
 (Samsung remote API, wss :8002). A press is one tiny message each way - no page loads, no new connections.
 First use: the TV asks once to "Allow" this remote; its token is then kept in ~/.secrets/samsung_tv_token.
 """
-import asyncio, base64, json, logging, mimetypes, os, ssl, time, urllib.request
+import asyncio, base64, json, logging, mimetypes, os, ssl, time, urllib.parse, urllib.request
 from pathlib import Path
 from websockets.asyncio.server import serve
 from websockets.asyncio.client import connect
@@ -16,6 +16,8 @@ TV_IP = os.environ.get("TV_IP", "192.168.0.236")
 PORT = int(os.environ.get("PORT", "8496"))
 NAME = base64.b64encode(b"Phone Remote (tvremote.home)").decode()
 TOKEN_FILE = Path.home() / ".secrets/samsung_tv_token"
+JF = os.environ.get("JELLYFIN", "http://192.168.0.154:8097")
+JF_KEY_FILE = Path.home() / ".secrets/jellyfin_tvremote_key"   # Jellyfin API key "TVRemote" (owner-approved)
 WEB = Path(__file__).resolve().parent / "web"
 DESIGNS = Path(__file__).resolve().parent / "designs"
 APPS = {  # Samsung Tizen app ids; checked against the TV's installed list at connect (see apps.json)
@@ -156,6 +158,26 @@ class TV:
 tv = TV()
 
 
+def jf_find(q):
+    """Library search for the phone: movies and shows whose name contains the letters typed."""
+    try:
+        key = JF_KEY_FILE.read_text().strip()
+    except FileNotFoundError:
+        key = ""
+    if not key:
+        return {"need_key": True}
+    url = JF + "/Items?" + urllib.parse.urlencode({
+        "SearchTerm": q, "Recursive": "true", "IncludeItemTypes": "Movie,Series", "Limit": "40",
+        "Fields": "ProductionYear", "EnableTotalRecordCount": "false", "ImageTypeLimit": "1", "EnableImageTypes": "Primary"})
+    req = urllib.request.Request(url, headers={"X-Emby-Token": key})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        items = json.load(r).get("Items", [])
+    return {"results": [{
+        "id": i["Id"], "name": i.get("Name", ""), "year": i.get("ProductionYear"), "type": i.get("Type"),
+        "img": (f"{JF}/Items/{i['Id']}/Images/Primary?fillHeight=240&quality=80&tag={i['ImageTags']['Primary']}"
+                if (i.get("ImageTags") or {}).get("Primary") else None)} for i in items]}
+
+
 async def phone(ws):
     tv.phones.add(ws)
     await ws.send(json.dumps({"tv": tv.status}))
@@ -165,6 +187,17 @@ async def phone(ws):
             m = json.loads(raw)
             if "k" in m and m["k"] in ALLOWED_KEYS:
                 ok = await tv.key(m["k"], m.get("c", "Click") if m.get("c") in ("Click", "Press", "Release") else "Click")
+            elif isinstance(m.get("find"), str):
+                q = m["find"].strip()[:60]
+                try:
+                    res = await asyncio.to_thread(jf_find, q) if q else {"results": []}
+                except Exception as e:
+                    res = {"error": "Jellyfin did not answer"}
+                    log.info("find: %s", type(e).__name__)
+                res["find"] = m.get("n")
+                await ws.send(json.dumps(res)); continue
+            elif isinstance(m.get("open"), str) and m["open"].isalnum():
+                ok = await tv.launch("jellyfinflix", "item=" + m["open"])
             elif isinstance(m.get("search"), str) and m["search"].strip():
                 ok = await tv.search(m["search"].strip()[:80])
             elif "app" in m:

@@ -90,10 +90,10 @@ if (last) {
 } else {
   app.go('profiles');
 }
-// Phone remote (tvremote.home, JTV-13) opens the app with "search=<words>" (Samsung DEEP_LINK -> app control data):
-// go to Search and fill it in. Works on a fresh start and when the app is already running.
+// Phone remote (tvremote.home, JTV-13) opens the app with "item=<id>" (show that movie / show) or "search=<words>"
+// (Samsung DEEP_LINK -> app control data). Works on a fresh start and when the app is already running.
 function remoteSearch() {
-  let term = '';
+  let term = '', item = '';
   try {
     const req = window.tizen.application.getCurrentApplication().getRequestedAppControl();
     const data = (req && req.appControl && req.appControl.data) || [];
@@ -102,9 +102,17 @@ function remoteSearch() {
       if (v.charAt(0) === '{') { try { const j = JSON.parse(v); v = String(j.values || j.PAYLOAD || j.search || v); } catch (e) { /* keep raw */ } }
       const m = /search=([\s\S]*)$/.exec(v);
       if (m) term = m[1].trim();
+      const i = /item=([0-9a-fA-F]{16,64})/.exec(v);
+      if (i) item = i[1];
     }
   } catch (e) { return; }
-  if (!term || !S.token) return;
+  if (!S.token) return;
+  if (item) {
+    log('remote open', { item });
+    get('/Users/{U}/Items/' + item, {}, 0).then((it) => openDetails(slim(it))).catch((e) => log('remote open failed', { item, e: String(e) }));
+    return;
+  }
+  if (!term) return;
   log('remote search', { term });
   app.go('search');
   const s = app.screen('search');
