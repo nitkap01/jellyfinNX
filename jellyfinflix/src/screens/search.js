@@ -62,6 +62,8 @@ export function searchScreen(host) {
     hide() { root.classList.remove('on'); },
     resume() { if (focus === 'kb') kb.focus(); else rows.focus(); },
     reenter() { focus = 'kb'; rows.blur(); kb.focus(); },
+    // filled in from outside (the phone remote, tvremote.home): same as typing it on the letter grid
+    setQuery(t) { kb.text = t; qt.textContent = t; if (focus === 'res') { rows.blur(); focus = 'kb'; kb.focus(); } later(t); },
     key(k, e) {
       if (k === 'back') {
         if (focus === 'res') { rows.blur(); focus = 'kb'; kb.focus(); return true; }

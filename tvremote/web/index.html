@@ -24,7 +24,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
   touch-action: none; -webkit-text-size-adjust: 100%; }
 body { position: fixed; inset: 0; }
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; touch-action: none; }
-.wrap { position: absolute; inset: 0; max-width: 480px; margin: 0 auto; display: grid; grid-template-rows: auto auto 1fr auto; gap: 12px;
+.wrap { position: absolute; inset: 0; max-width: 480px; margin: 0 auto; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 12px;
   padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 14px); }
 
 .status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--muted); height: 20px; }
@@ -42,7 +42,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .app.jflix { background: linear-gradient(135deg, #5b3df5, #b04cff); font-size: 14px; }
 .down { transform: scale(.94); filter: brightness(1.3); }
 
-.main { display: grid; grid-template-columns: 66px 1fr 66px; gap: 10px; min-height: 0; }
+.main { display: grid; grid-template-columns: 1fr 66px; gap: 10px; min-height: 0; }
 .slide { background: var(--key); border-radius: 33px; position: relative; display: flex; flex-direction: column; align-items: center;
   justify-content: space-between; padding: 16px 0; color: var(--muted); font-weight: 700; overflow: hidden; }
 .slide b { font-size: 26px; font-weight: 300; color: var(--text); line-height: 1; }
@@ -63,6 +63,13 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .mode button { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; color: var(--muted); }
 .mode button.on { background: #ffffff1f; color: var(--text); }
 
+.search { display: flex; gap: 8px; }
+.search input { flex: 1; min-width: 0; height: 48px; border-radius: 24px; border: 1px solid var(--line); background: #15171d;
+  color: var(--text); font: inherit; font-size: 16px; padding: 0 18px; outline: none; -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+.search input:focus { border-color: #7b5cff; }
+.search input::placeholder { color: var(--muted); }
+.search .go { width: 64px; height: 48px; border-radius: 24px; background: #7b5cff; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.search .go svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .k { height: 58px; border-radius: 29px; background: var(--key); display: flex; align-items: center; justify-content: center; transition: transform .05s; }
 .k.down { background: var(--key-hi); filter: none; }
@@ -78,8 +85,11 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
     <button class="app jflix" data-app="jellyfinflix">JellyfinFlix</button>
     <button class="app prime" data-app="prime">prime video</button>
   </div>
+  <form class="search" id="search" autocomplete="off">
+    <input id="q" type="search" enterkeyhint="search" placeholder="Search a movie name…" aria-label="Search a movie name">
+    <button class="go" type="submit" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></button>
+  </form>
   <div class="main">
-    <div class="slide" data-slide="CH"><b>+</b><span>CHANNEL</span><b>−</b><div class="knob"></div></div>
     <div class="pad" id="pad">
       <div class="mode"><button class="on" data-mode="arrows">Arrows</button><button data-mode="pointer">Pointer</button></div>
       <div class="hint" id="hint">Swipe to move · tap = OK · hold = back</div>
@@ -104,7 +114,8 @@ const stop = (e) => { if (e.cancelable) e.preventDefault(); };
 ["gesturestart", "gesturechange", "gestureend", "dblclick", "contextmenu", "selectstart"].forEach((t) => document.addEventListener(t, stop, { passive: false }));
 document.addEventListener("touchmove", stop, { passive: false });
 document.addEventListener("touchstart", (e) => { if (e.touches.length > 1) stop(e); }, { passive: false });
-document.addEventListener("touchend", stop, { passive: false }); // no synthetic click => no double-tap zoom
+// no synthetic click => no double-tap zoom; the search box still needs its tap to get the keyboard
+document.addEventListener("touchend", (e) => { if (!e.target.closest(".search")) stop(e); }, { passive: false });
 document.addEventListener("wheel", (e) => { if (e.ctrlKey) stop(e); }, { passive: false });
 
 // ---------- one always-open connection ----------
@@ -139,7 +150,7 @@ document.addEventListener("pointerdown", (e) => {
 // ---------- side bars: drag up = +, down = −; further = faster ----------
 $$("[data-slide]").forEach((s) => {
   let y0, off = 0, timer; const knob = s.querySelector(".knob"), kind = s.dataset.slide;
-  const keys = kind === "VOL" ? ["KEY_VOLUP", "KEY_VOLDOWN"] : ["KEY_CHUP", "KEY_CHDOWN"];
+  const keys = ["KEY_VOLUP", "KEY_VOLDOWN"];
   const half = () => s.getBoundingClientRect().height / 2 - 34;
   const tick = () => {
     const f = Math.max(-1, Math.min(1, off / half()));
@@ -162,6 +173,15 @@ $$("[data-slide]").forEach((s) => {
   const end = () => { s.classList.remove("active"); clearTimeout(timer); off = 0; knob.style.top = "calc(50% - 25px)"; };
   s.addEventListener("pointerup", end); s.addEventListener("pointercancel", end); s.addEventListener("lostpointercapture", end);
 });
+
+// ---------- search: the TV shows the results (JellyfinFlix), or types into the TV's own keyboard if one is open ----------
+$("#search").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("#q").value.trim(); if (!q) return;
+  buzz(12); send({ search: q }); $("#q").blur();
+});
+// tapping anywhere else closes the phone keyboard
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest(".search")) $("#q").blur(); });
 
 // ---------- touch pad ----------
 const pad = $("#pad"), dot = $("#dot");

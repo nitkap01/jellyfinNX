@@ -36,6 +36,7 @@ class TV:
         self.status = "connecting"  # connected | allow | off | denied | connecting
         self.phones = set()
         self.apps = {}
+        self.ime = False  # the TV's own on-screen keyboard is open (e.g. Netflix search)
 
     def token(self):
         try:
@@ -84,6 +85,10 @@ class TV:
                             await self.set("connected")
                             await ws.send(json.dumps({"method": "ms.channel.emit", "params": {
                                 "event": "ed.installedApp.get", "to": "host"}}))
+                        elif ev in ("ms.remote.imeStart", "ms.remote.imeUpdate"):
+                            self.ime = True
+                        elif ev == "ms.remote.imeEnd":
+                            self.ime = False
                         elif ev == "ms.channel.unauthorized":
                             await self.set("denied")
                         elif ev == "ed.installedApp.get":
@@ -119,13 +124,25 @@ class TV:
             "Cmd": "LeftClick", "TypeOfRemote": "ProcessMouseDevice"}}))
         return True
 
-    async def launch(self, name):
+    async def search(self, text):
+        """TV keyboard open -> type the words into it; otherwise open JellyfinFlix with its search filled in."""
+        if not self.ws:
+            return False
+        if self.ime:
+            await self.ws.send(json.dumps({"method": "ms.remote.control", "params": {
+                "Cmd": base64.b64encode(text.encode()).decode(), "DataOfCmd": "base64", "TypeOfRemote": "SendInputString"}}))
+            await self.ws.send(json.dumps({"method": "ms.remote.control", "params": {"TypeOfRemote": "SendInputEnd"}}))
+            return True
+        return await self.launch("jellyfinflix", "search=" + text)
+
+    async def launch(self, name, meta=None):
         app = APPS.get(name)
         if not app:
             return False
         if self.ws:
             await self.ws.send(json.dumps({"method": "ms.channel.emit", "params": {
-                "event": "ed.apps.launch", "to": "host", "data": {"appId": app, "action_type": "DEEP_LINK"}}}))
+                "event": "ed.apps.launch", "to": "host", "data": dict({"appId": app, "action_type": "DEEP_LINK"},
+                                                                      **({"metaTag": meta} if meta else {}))}}))
             return True
         # TV link down: try the plain launch call once
         def post():
@@ -148,6 +165,8 @@ async def phone(ws):
             m = json.loads(raw)
             if "k" in m and m["k"] in ALLOWED_KEYS:
                 ok = await tv.key(m["k"], m.get("c", "Click") if m.get("c") in ("Click", "Press", "Release") else "Click")
+            elif isinstance(m.get("search"), str) and m["search"].strip():
+                ok = await tv.search(m["search"].strip()[:80])
             elif "app" in m:
                 ok = await tv.launch(m["app"])
             elif "m" in m:

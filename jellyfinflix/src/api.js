@@ -3,7 +3,7 @@
 import { store } from './store.js';
 import { warn } from './log.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 export const S = { server: '', userId: '', token: '', name: '', admin: false, img: '' };
 export let onAuthLost = () => {};
 export function setAuthLost(fn) { onAuthLost = fn; }

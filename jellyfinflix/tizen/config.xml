@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="http://jellyfin.org/JellyfinFlix" version="0.1.0" viewmodes="maximized">
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="http://jellyfin.org/JellyfinFlix" version="0.1.1" viewmodes="maximized">
     <access origin="*" subdomains="true"></access>
     <tizen:application id="JFlixPkg01.JellyfinFlix" package="JFlixPkg01" required_version="2.3"/>
     <author href="https://github.com/nitkap01/jellyfinNX" email="officialnitinkapoor@gmail.com">Nitin Kapoor</author>

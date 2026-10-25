@@ -90,6 +90,28 @@ if (last) {
 } else {
   app.go('profiles');
 }
+// Phone remote (tvremote.home, JTV-13) opens the app with "search=<words>" (Samsung DEEP_LINK -> app control data):
+// go to Search and fill it in. Works on a fresh start and when the app is already running.
+function remoteSearch() {
+  let term = '';
+  try {
+    const req = window.tizen.application.getCurrentApplication().getRequestedAppControl();
+    const data = (req && req.appControl && req.appControl.data) || [];
+    for (const d of data) for (let v of (d.value || [])) {
+      if (typeof v !== 'string') continue;
+      if (v.charAt(0) === '{') { try { const j = JSON.parse(v); v = String(j.values || j.PAYLOAD || j.search || v); } catch (e) { /* keep raw */ } }
+      const m = /search=([\s\S]*)$/.exec(v);
+      if (m) term = m[1].trim();
+    }
+  } catch (e) { return; }
+  if (!term || !S.token) return;
+  log('remote search', { term });
+  app.go('search');
+  const s = app.screen('search');
+  if (s && s.setQuery) s.setQuery(term.slice(0, 80));
+}
+window.addEventListener('appcontrol', remoteSearch);
+setTimeout(remoteSearch, 0);
 mark('shell');
 // Test hooks (used by the CDP scripts in test/): reset to Home top.
 window.__jfApp = app;
