@@ -19,10 +19,15 @@ MIN_OUTPUT_RATIO=0.50
 NAS_FREE_MARGIN_BYTES=$((20 * 1024 * 1024 * 1024))
 SMB_VISIBILITY_RETRIES=5
 SMB_VISIBILITY_SLEEP=2
+SMB_UPLOAD_ATTEMPTS=2
+SMB_OP_TIMEOUT_S=60
+SMB_PUT_MIN_MBPS=2
+SMB_PUT_TIMEOUT_FLOOR_S=600
 
 WORK_DIR="${AUDIOFIX_WORK_DIR:-$HOME/jellyfin_audio_fix/work}"
 LOG_DIR="$HOME/jellyfin_audio_fix/logs"
 AUTHFILE="${AUDIOFIX_AUTHFILE:-$HOME/.audiofix.auth}"
+JELLYFIN_AUTHFILE="${AUDIOFIX_JELLYFIN_AUTHFILE:-$HOME/.audiofix.jellyfin}"
 JOURNAL_FILE="$WORK_DIR/audiofix.journal"
 LOCK_FILE="$WORK_DIR/audiofix.lock"
 PROGRESS_STATUS_FILE="$WORK_DIR/progress.status"
@@ -33,12 +38,23 @@ LRA_THRESHOLD="$LRA_THRESHOLD_DEFAULT"
 POSITIONAL=""
 LOCAL_OUT=""
 LOCK_FD=9
+TICKER_PID=""
+TICKER_LABEL=""
 
 usage() {
   cat <<'EOF'
 Usage: fix-movie-audio.sh [--dry-run] [--lra-threshold N] [<movie-folder-or-video-file>]
 
 No path given: opens an interactive picker over /MEDIA/Eng_Movies and /MEDIA/Hin_Movies.
+
+After a successful fix, Jellyfin is asked to rescan so it stops serving cached
+stream info. That needs ~/.audiofix.jellyfin (mode 600), one instance per line
+as "<url> <api_key>". Each instance has its own key (Dashboard -> API Keys):
+
+  http://127.0.0.1:8096 <key from the 8096 dashboard>
+  http://127.0.0.1:8097 <key from the 8097 dashboard>
+
+Without that file the fix still runs; it just prints the manual-rescan reminder.
 EOF
 }
 
@@ -62,12 +78,19 @@ die() {
   printf 'ERROR: %s\n' "$*" >&2
   local status
   status="$(fail_status_for_code "$code")"
-  [ -n "$status" ] && log_result "$status" 2>/dev/null || true
+  if [ -n "$status" ]; then
+    log_result "$status" 2>/dev/null || true
+    log_detail "$status" "$*" 2>/dev/null || true
+  fi
   exit "$code"
 }
 
 cleanup() {
   local rc=$?
+  if [ -n "${TICKER_PID:-}" ]; then
+    kill "$TICKER_PID" 2>/dev/null || true
+    wait "$TICKER_PID" 2>/dev/null || true
+  fi
   if [ -n "$LOCAL_OUT" ] && [ -f "$LOCAL_OUT" ] && [ "${KEEP_LOCAL_OUT:-false}" != "true" ]; then
     rm -f "$LOCAL_OUT"
   fi
@@ -162,6 +185,49 @@ run_ffmpeg_tracked() {
   return "$rc"
 }
 
+ticker_loop() {
+  local label="$1" watch="$2" total="$3"
+  trap - EXIT INT TERM
+  local elapsed=0 pct=0 sz mm ss show_bar=false
+  if [ -t 1 ]; then show_bar=true; fi
+  while :; do
+    if [ -n "$watch" ]; then
+      sz="$(stat -c '%s' "$watch" 2>/dev/null || echo 0)"
+      pct="$(awk -v s="$sz" -v t="$total" 'BEGIN{if(t<=0){print 0; exit} p=int(s*100/t); if(p>100)p=100; print p}')"
+    fi
+    mm=$(( elapsed / 60 )); ss=$(( elapsed % 60 ))
+    write_progress_status "$(printf '%s %02d:%02d' "$label" "$mm" "$ss")" "$pct"
+    if [ "$show_bar" = "true" ]; then
+      printf '\r%s [%s] %3d%%  %02d:%02d elapsed  ' "$label" "$(make_bar "$pct")" "$pct" "$mm" "$ss"
+    fi
+    sleep 1
+    elapsed=$(( elapsed + 1 ))
+  done
+}
+
+ticker_start() {
+  TICKER_LABEL="$1"
+  log "$1"
+  ticker_loop "$1" "${2:-}" "${3:-0}" &
+  TICKER_PID=$!
+}
+
+ticker_stop() {
+  [ -n "${TICKER_PID:-}" ] || return 0
+  kill "$TICKER_PID" 2>/dev/null || true
+  wait "$TICKER_PID" 2>/dev/null || true
+  TICKER_PID=""
+  write_progress_status "$TICKER_LABEL" 100
+  if [ -t 1 ]; then
+    printf '\r%s [%s] 100%%  \n' "$TICKER_LABEL" "$(make_bar 100)"
+  fi
+}
+
+phase_update() {
+  write_progress_status "$1" "${2:-0}"
+  log "$1"
+}
+
 parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -192,6 +258,12 @@ require_deps() {
   for bin in awk stat df flock sha256sum; do
     command -v "$bin" >/dev/null 2>&1 || die 1 "Required command not found: $bin"
   done
+  local encoders
+  encoders="$("$FFMPEG" -hide_banner -encoders 2>/dev/null || true)"
+  case "$encoders" in
+    *libfdk_aac*) ;;
+    *) die 1 "This ffmpeg build lacks the libfdk_aac encoder, which is required (the native aac encoder overshoots the true-peak ceiling on dense material)." ;;
+  esac
 }
 
 acquire_lock() {
@@ -344,7 +416,9 @@ validate_source() {
 
   SRC_SIZE="$(stat -c '%s' "$SRC")"
   SRC_MTIME="$(stat -c '%Y' "$SRC")"
+  ticker_start "Checksumming source"
   SRC_SHA256="$(sha256sum "$SRC" | awk '{print $1}')"
+  ticker_stop
 }
 
 probe_default_audio_stream() {
@@ -437,16 +511,22 @@ decide_fix() {
 
 build_ffmpeg_cmd() {
   local audio_filter="" ac_opt=()
+  # Backstop hard ceiling in case loudnorm's own limiter (which falls back to
+  # "dynamic" mode whenever the source LRA is far above the target and a flat
+  # gain alone can't narrow it) lets a peak through above TARGET_TP.
+  local limiter_linear
+  limiter_linear="$(awk -v tp="$TARGET_TP" 'BEGIN{printf "%.4f", exp(tp / 20 * log(10))}')"
   case "$DECISION" in
     LOUDNORM)
-      audio_filter="loudnorm=I=${TARGET_I}:LRA=${TARGET_LRA}:TP=${TARGET_TP}:measured_I=${IN_I}:measured_LRA=${IN_LRA}:measured_TP=${IN_TP}:measured_thresh=${IN_TH}:offset=${OFFSET}:linear=false"
+      audio_filter="loudnorm=I=${TARGET_I}:LRA=${TARGET_LRA}:TP=${TARGET_TP}:measured_I=${IN_I}:measured_LRA=${IN_LRA}:measured_TP=${IN_TP}:measured_thresh=${IN_TH}:offset=${OFFSET}:linear=true"
       [ "$AUDIO_CH" -eq 1 ] && audio_filter="${audio_filter}:dual_mono=true"
+      audio_filter="${audio_filter},alimiter=limit=${limiter_linear}:level=disabled"
       ;;
     DOWNMIX)
       ac_opt=(-ac:a:"${AUDIO_K}" 2)
       ;;
     DOWNMIX+LOUDNORM)
-      audio_filter="aformat=channel_layouts=stereo,loudnorm=I=${TARGET_I}:LRA=${TARGET_LRA}:TP=${TARGET_TP}:measured_I=${IN_I}:measured_LRA=${IN_LRA}:measured_TP=${IN_TP}:measured_thresh=${IN_TH}:offset=${OFFSET}:linear=false"
+      audio_filter="aformat=channel_layouts=stereo,loudnorm=I=${TARGET_I}:LRA=${TARGET_LRA}:TP=${TARGET_TP}:measured_I=${IN_I}:measured_LRA=${IN_LRA}:measured_TP=${IN_TP}:measured_thresh=${IN_TH}:offset=${OFFSET}:linear=true,alimiter=limit=${limiter_linear}:level=disabled"
       ac_opt=(-ac:a:"${AUDIO_K}" 2)
       ;;
   esac
@@ -460,9 +540,13 @@ build_ffmpeg_cmd() {
 
   LOCAL_OUT="$WORK_DIR/audiofix-$(date +%s)-$$.${out_ext}"
 
+  # libfdk_aac, not the native aac encoder: on dense material the native encoder
+  # can blow a single frame several dB past the ceiling the filter chain handed it
+  # (measured +4.7 dB on one 100ms frame of a compliant -2.8 dBTP signal), which
+  # trips the true-peak gate. libfdk_aac reconstructs the same signal cleanly.
   FFMPEG_CMD=("$FFMPEG" -hide_banner -nostats -nostdin -y -i "$SRC"
     -map 0 -map_metadata 0 -map_chapters 0 -c copy
-    -c:a:"${AUDIO_K}" aac -b:a:"${AUDIO_K}" "$AAC_BITRATE" -ar:a:"${AUDIO_K}" "$AUDIO_SR")
+    -c:a:"${AUDIO_K}" libfdk_aac -b:a:"${AUDIO_K}" "$AAC_BITRATE" -ar:a:"${AUDIO_K}" "$AUDIO_SR")
   [ ${#ac_opt[@]} -gt 0 ] && FFMPEG_CMD+=("${ac_opt[@]}")
   [ -n "$audio_filter" ] && FFMPEG_CMD+=(-filter:a:"${AUDIO_K}" "$audio_filter")
   FFMPEG_CMD+=(-metadata "audiofix=loudnorm I=${TARGET_I} LRA=${TARGET_LRA} TP=${TARGET_TP}; $(date '+%Y-%m-%d')")
@@ -607,36 +691,48 @@ detect_cifs_mount() {
   done </proc/mounts
 }
 
+smb_put_timeout_s() {
+  local bytes t
+  bytes="$(stat -c '%s' "$1" 2>/dev/null || echo 0)"
+  t=$(( bytes / (SMB_PUT_MIN_MBPS * 1024 * 1024) ))
+  [ "$t" -lt "$SMB_PUT_TIMEOUT_FLOOR_S" ] && t="$SMB_PUT_TIMEOUT_FLOOR_S"
+  printf '%s' "$t"
+}
+
 smb_raw() {
   local op="$1" rel_dir="$2"; shift 2
-  local cmd
+  local cmd timeout_s="$SMB_OP_TIMEOUT_S"
   case "$op" in
     ls) cmd='ls' ;;
-    put) cmd="put \"$1\" \"$2\"" ;;
+    put) cmd="put \"$1\" \"$2\""; timeout_s="$(smb_put_timeout_s "$1")" ;;
     del) cmd="del \"$1\"" ;;
     rename) cmd="rename \"$1\" \"$2\"" ;;
     *) die 1 "Internal error: unknown smb op $op" ;;
   esac
-  smbclient "//${SERVER}/${SHARE}" -A "$AUTHFILE" -m SMB3 -D "$rel_dir" -c "$cmd" 2>&1
+  timeout -k 10 "$timeout_s" smbclient "//${SERVER}/${SHARE}" -A "$AUTHFILE" -m SMB3 -D "$rel_dir" -c "$cmd" 2>&1
 }
 
 classify_smb_result() {
-  local out="$1"
+  local out="$1" rc="${2:-0}"
   case "$out" in
     *NT_STATUS_ACCESS_DENIED*|*NT_STATUS_OBJECT_NAME_COLLISION*|*NT_STATUS_OBJECT_NAME_NOT_FOUND*|*NT_STATUS_LOGON_FAILURE*|*NT_STATUS_BAD_NETWORK_NAME*|*NT_STATUS_OBJECT_PATH_NOT_FOUND*)
       echo "CLEAN_FAIL" ;;
     *NT_STATUS_*)
       echo "AMBIGUOUS" ;;
     *)
-      echo "OK" ;;
+      if [ "$rc" -eq 0 ]; then echo "OK"; else echo "AMBIGUOUS"; fi
+      ;;
   esac
 }
 
 smb_op() {
   local op="$1" rel_dir="$2"; shift 2
-  local out status
+  local out status rc
+  set +e
   out="$(smb_raw "$op" "$rel_dir" "$@")"
-  status="$(classify_smb_result "$out")"
+  rc=$?
+  set -e
+  status="$(classify_smb_result "$out" "$rc")"
   printf '%s\x1e%s\n' "$status" "$out"
 }
 
@@ -647,9 +743,11 @@ smb_reconcile() {
   grep -qF "  ${ORIGINAL_NAME}" <<<"$listing" && HAS_ORIGINAL=true
   grep -qF "  ${BACKUP_NAME}" <<<"$listing" && HAS_BACKUP=true
   [ -n "${REMOTE_TMP:-}" ] && grep -qF "  ${REMOTE_TMP}" <<<"$listing" && HAS_TMP=true
+  return 0
 }
 
 nas_preflight() {
+  phase_update "Checking NAS"
   check_authfile
   REL_DIR="${SRC_DIR#"$ON_CIFS_MP"}"
   REL_DIR="${REL_DIR#/}"
@@ -679,7 +777,9 @@ nas_preflight() {
   if [ "$now_size" != "$SRC_SIZE" ] || [ "$now_mtime" != "$SRC_MTIME" ]; then
     die 2 "Source file changed while processing (size/mtime mismatch); aborting."
   fi
+  ticker_start "Checksumming source"
   now_sha="$(sha256sum "$SRC" | awk '{print $1}')"
+  ticker_stop
   [ "$now_sha" = "$SRC_SHA256" ] || die 2 "Source file changed while processing (content mismatch); aborting."
 }
 
@@ -692,60 +792,60 @@ write_back_to_nas() {
 
   journal_write "uploading"
   REMOTE_TMP_PENDING="$REMOTE_TMP"
-  local r status out
-  r="$(smb_op put "$REL_DIR" "$LOCAL_OUT" "$REMOTE_TMP")"
-  status="${r%%$'\x1e'*}"; out="${r#*$'\x1e'}"
-  if [ "$status" != "OK" ]; then
-    if [ "$status" = "AMBIGUOUS" ]; then
-      sleep "$SMB_VISIBILITY_SLEEP"
-      smb_reconcile
-      if [ "$HAS_TMP" = "true" ]; then
-        log "Ambiguous upload failure, but the temp file did land — continuing."
-      else
-        smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
-        REMOTE_TMP_PENDING=""
-        journal_clear
-        die 7 "Upload failed (ambiguous, reconciled as not-landed): $out"
-      fi
-    else
-      REMOTE_TMP_PENDING=""
-      journal_clear
-      die 7 "Upload failed: $out"
+  local r status out upload_size attempts=0 uploaded=false
+  upload_size="$(stat -c '%s' "$LOCAL_OUT")"
+  while [ "$attempts" -lt "$SMB_UPLOAD_ATTEMPTS" ]; do
+    attempts=$((attempts + 1))
+    ticker_start "Uploading to NAS" "$ON_CIFS_MP/$REL_DIR/$REMOTE_TMP" "$upload_size"
+    r="$(smb_op put "$REL_DIR" "$LOCAL_OUT" "$REMOTE_TMP")"
+    ticker_stop
+    status="${r%%$'\x1e'*}"; out="${r#*$'\x1e'}"
+    if [ "$status" = "OK" ]; then uploaded=true; break; fi
+    if [ "$status" != "AMBIGUOUS" ]; then break; fi
+    sleep "$SMB_VISIBILITY_SLEEP"
+    smb_reconcile
+    if [ "$HAS_TMP" = "true" ]; then
+      log "Ambiguous upload failure, but the temp file did land — continuing."
+      uploaded=true
+      break
     fi
+    smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
+  done
+
+  if [ "$uploaded" != "true" ]; then
+    smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
+    REMOTE_TMP_PENDING=""
+    journal_clear
+    die 7 "Upload failed after $attempts attempt(s) [$status]: $out"
   fi
 
-  local i=0 visible=false
+  phase_update "Verifying upload"
+  local remote_tmp_path="$ON_CIFS_MP/$REL_DIR/$REMOTE_TMP"
+  local i=0 ok=false remote_tmp_size="" remote_tmp_dur="" local_dur
+  local_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$LOCAL_OUT")"
   while [ $i -lt "$SMB_VISIBILITY_RETRIES" ]; do
-    if [ -e "$ON_CIFS_MP/$REL_DIR/$REMOTE_TMP" ]; then visible=true; break; fi
+    if [ -e "$remote_tmp_path" ]; then
+      remote_tmp_size="$(stat -c '%s' "$remote_tmp_path" 2>/dev/null || echo "")"
+      remote_tmp_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$remote_tmp_path" 2>/dev/null || echo "")"
+      if [ "$remote_tmp_size" = "$upload_size" ] && [ -n "$remote_tmp_dur" ] \
+        && within_tolerance "$remote_tmp_dur" "$local_dur" 0.5; then
+        ok=true
+        break
+      fi
+    fi
     sleep "$SMB_VISIBILITY_SLEEP"
     i=$((i + 1))
   done
-  if [ "$visible" != "true" ]; then
-    smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
-    REMOTE_TMP_PENDING=""
-    journal_clear
-    die 7 "Uploaded temp file never became visible through the read mount."
-  fi
 
-  local remote_tmp_size remote_tmp_dur local_size local_dur
-  remote_tmp_size="$(stat -c '%s' "$ON_CIFS_MP/$REL_DIR/$REMOTE_TMP")"
-  local_size="$(stat -c '%s' "$LOCAL_OUT")"
-  if [ "$remote_tmp_size" != "$local_size" ]; then
+  if [ "$ok" != "true" ]; then
     smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
     REMOTE_TMP_PENDING=""
     journal_clear
-    die 7 "Uploaded file size ($remote_tmp_size) doesn't match local ($local_size)."
-  fi
-  remote_tmp_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$ON_CIFS_MP/$REL_DIR/$REMOTE_TMP" 2>/dev/null || echo "")"
-  local_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$LOCAL_OUT")"
-  if [ -z "$remote_tmp_dur" ] || ! within_tolerance "$remote_tmp_dur" "$local_dur" 0.5; then
-    smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
-    REMOTE_TMP_PENDING=""
-    journal_clear
-    die 7 "Uploaded file failed duration verification through the read mount."
+    die 7 "Uploaded temp file failed verification through $ON_CIFS_MP within $SMB_VISIBILITY_RETRIES retries (size '$remote_tmp_size' vs $upload_size, duration '$remote_tmp_dur' vs $local_dur s)."
   fi
 
   journal_write "uploaded_verified"
+  phase_update "Swapping files"
 
   r="$(smb_op rename "$REL_DIR" "$ORIGINAL_NAME" "$BACKUP_NAME")"
   status="${r%%$'\x1e'*}"; out="${r#*$'\x1e'}"
@@ -794,8 +894,9 @@ write_back_to_nas() {
           log "Rollback failed because the original swap had actually already succeeded (the destination name was already taken by it) — that's the correct outcome, not an error. Continuing."
           smb_raw del "$REL_DIR" "$REMOTE_TMP" >/dev/null 2>&1 || true
         else
+          REMOTE_TMP_PENDING=""
           print_manual_recovery
-          exit 8
+          die 8 "Final rename failed and the rollback also failed. The temp upload ($REMOTE_TMP) and the backup ($BACKUP_NAME) were left in place for manual recovery."
         fi
       fi
     fi
@@ -806,44 +907,105 @@ write_back_to_nas() {
 }
 
 print_manual_recovery() {
-  log "!! MANUAL ACTION REQUIRED — the movie is not at its expected filename."
-  log "   Nothing was deleted. Files should be present in: $REL_DIR/"
-  log "   To finish the swap by hand:"
-  log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$REMOTE_TMP\" \"$ORIGINAL_NAME\"'"
-  log "   ...or to put things back exactly as they were:"
-  log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$BACKUP_NAME\" \"$ORIGINAL_NAME\"'"
+  local phase="${1:-pre_swap}"
+  if [ "$phase" = "post_swap" ]; then
+    log "!! MANUAL ACTION REQUIRED — the swap on the NAS finished, but the final check"
+    log "   could not confirm it. The fixed file should already be at:"
+    log "     $REL_DIR/$ORIGINAL_NAME"
+    log "   The original should be kept safely as:"
+    log "     $REL_DIR/$BACKUP_NAME"
+    log "   Check both by hand (size/duration/stream count) before trusting either."
+    log "   If the swapped file is wrong, restore the original with:"
+    log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$ORIGINAL_NAME\" \"${ORIGINAL_NAME}.suspect\"'"
+    log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$BACKUP_NAME\" \"$ORIGINAL_NAME\"'"
+  else
+    log "!! MANUAL ACTION REQUIRED — the movie is not at its expected filename."
+    log "   Nothing was deleted. Files should be present in: $REL_DIR/"
+    log "   To finish the swap by hand:"
+    log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$REMOTE_TMP\" \"$ORIGINAL_NAME\"'"
+    log "   ...or to put things back exactly as they were:"
+    log "     smbclient \"//${SERVER}/${SHARE}\" -A $AUTHFILE -m SMB3 -D \"$REL_DIR\" -c 'rename \"$BACKUP_NAME\" \"$ORIGINAL_NAME\"'"
+  fi
 }
 
 verify_remote() {
+  phase_update "Verifying on NAS"
   local i=0 ok=false
-  local final_size local_size
+  local final_size="" local_size backup_size="" final_dur="" final_count=""
   local_size="$(stat -c '%s' "$LOCAL_OUT")"
   while [ $i -lt "$SMB_VISIBILITY_RETRIES" ]; do
     if [ -e "$SRC" ] && [ -e "$BACKUP_PATH" ]; then
       final_size="$(stat -c '%s' "$SRC")"
-      if [ "$final_size" = "$local_size" ]; then ok=true; break; fi
+      backup_size="$(stat -c '%s' "$BACKUP_PATH" 2>/dev/null || echo "")"
+      final_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$SRC" 2>/dev/null || echo "")"
+      final_count="$("$FFPROBE" -v error -show_entries stream=index -of csv=p=0 -i "$SRC" 2>/dev/null | grep -c . || true)"
+      if [ "$final_size" = "$local_size" ] && [ "$backup_size" = "$SRC_SIZE" ] \
+        && [ -n "$final_dur" ] && within_tolerance "$final_dur" "$SRC_DURATION" "$DURATION_TOLERANCE_S" \
+        && [ "$final_count" = "$SRC_STREAM_COUNT" ]; then
+        ok=true
+        break
+      fi
     fi
     sleep "$SMB_VISIBILITY_SLEEP"
     i=$((i + 1))
   done
+
   if [ "$ok" != "true" ]; then
-    print_manual_recovery
-    exit 8
-  fi
-
-  local backup_size
-  backup_size="$(stat -c '%s' "$BACKUP_PATH")"
-  [ "$backup_size" = "$SRC_SIZE" ] || { print_manual_recovery; exit 8; }
-
-  local final_dur final_count
-  final_dur="$("$FFPROBE" -v error -show_entries format=duration -of default=nw=1:nk=1 -i "$SRC" 2>/dev/null || echo "")"
-  final_count="$("$FFPROBE" -v error -show_entries stream=index -of csv=p=0 -i "$SRC" 2>/dev/null | grep -c . || true)"
-  if [ -z "$final_dur" ] || ! within_tolerance "$final_dur" "$SRC_DURATION" "$DURATION_TOLERANCE_S" || [ "$final_count" != "$SRC_STREAM_COUNT" ]; then
-    print_manual_recovery
-    exit 8
+    print_manual_recovery "post_swap"
+    die 8 "Final verification through $ON_CIFS_MP did not pass within $SMB_VISIBILITY_RETRIES retries (size $final_size/backup $backup_size vs expected $local_size/$SRC_SIZE, duration '$final_dur' vs $SRC_DURATION s, streams $final_count vs $SRC_STREAM_COUNT)."
   fi
 
   journal_clear
+}
+
+trigger_library_scan() {
+  if [ ! -f "$JELLYFIN_AUTHFILE" ]; then
+    log "  Reminder: Jellyfin caches stream info in its own database. Run Dashboard ->"
+    log "  Scheduled Tasks -> Scan Media Library before testing playback, or it may"
+    log "  still try to serve the old track layout."
+    log "  (To rescan automatically instead, create $JELLYFIN_AUTHFILE — see --help.)"
+    return 0
+  fi
+
+  local mode
+  mode="$(stat -c '%a' "$JELLYFIN_AUTHFILE" 2>/dev/null || echo "")"
+  if [ "$mode" != "600" ]; then
+    log "  WARNING: library rescan skipped — $JELLYFIN_AUTHFILE must be mode 600 (is ${mode:-unknown})."
+    log "    chmod 600 $JELLYFIN_AUTHFILE"
+    return 0
+  fi
+
+  # Each instance carries its own key, so they are paired one per line:
+  #   <url> <api_key>
+  # Read into a variable first: `set -o pipefail` would turn a SIGPIPE on an
+  # early-exiting reader into a spurious failure.
+  local lines
+  lines="$(awk 'NF && $1 !~ /^#/ {print $1, $2}' "$JELLYFIN_AUTHFILE")"
+
+  if [ -z "$lines" ]; then
+    log "  WARNING: library rescan skipped — $JELLYFIN_AUTHFILE has no '<url> <api_key>' lines."
+    return 0
+  fi
+
+  local url key http
+  while IFS=' ' read -r url key; do
+    [ -n "$url" ] || continue
+    if [ -z "$key" ]; then
+      log "  WARNING: library rescan skipped for $url — no api key on its line."
+      continue
+    fi
+    url="${url%/}"
+    # Key goes in a header, never the URL, so it cannot leak into logs or ps output.
+    http="$(curl -sS -m 30 -o /dev/null -w '%{http_code}' -X POST \
+      -H "X-Emby-Token: $key" \
+      "$url/Library/Refresh" 2>/dev/null || echo "000")"
+    case "$http" in
+      2*) log "  library rescan started on $url" ;;
+      401|403) log "  WARNING: library rescan rejected by $url (HTTP $http) — check its api key." ;;
+      000) log "  WARNING: could not reach $url for a library rescan." ;;
+      *) log "  WARNING: library rescan on $url returned HTTP $http." ;;
+    esac
+  done <<<"$lines"
 }
 
 log_result() {
@@ -853,6 +1015,13 @@ log_result() {
   local line="RESULT|$(date -Is)|$status|${SRC:-}|${EXT_LOWER:-}|${AUDIO_CH:-}|${IN_I:-}|${IN_LRA:-}|${IN_TP:-}|${DECISION:-}|${OUT_CH:-}|${OUT_I:-}|${OUT_LRA:-}|${OUT_TP:-}|$SECONDS"
   printf '%s\n' "$line" >>"$LOG_DIR/audiofix.log"
   chmod 600 "$LOG_DIR/audiofix.log" 2>/dev/null || true
+}
+
+log_detail() {
+  local status="$1" detail
+  detail="$(printf '%s' "$2" | tr -d '\r' | tr '\n\t' '  ')"
+  detail="${detail:0:1000}"
+  printf 'DETAIL|%s|%s|%s|%s\n' "$(date -Is)" "$status" "${SRC:-}" "$detail" >>"$LOG_DIR/audiofix.log"
 }
 
 main() {
@@ -922,9 +1091,7 @@ main() {
     log "  It is safe but should be removed by hand."
   fi
 
-  log "  Reminder: Jellyfin caches stream info in its own database. Run Dashboard ->"
-  log "  Scheduled Tasks -> Scan Media Library before testing playback, or it may"
-  log "  still try to serve the old track layout."
+  trigger_library_scan
   log_result "OK_FIXED"
 }
 
