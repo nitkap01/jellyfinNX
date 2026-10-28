@@ -1,19 +1,26 @@
 [Unit]
-Description = Media fix helper for Jellyfin custom actions
-After = network-online.target
+Description=Media fix helper for Jellyfin custom actions (Fetch Subtitle / Fix Audio)
+After=network-online.target remote-fs.target
+Wants=network-online.target
 
 [Service]
-Type = simple
-User = nitin
-Group = nitin
-Environment = HOME=/home/nitin
-Environment = PYTHONUNBUFFERED=1
-WorkingDirectory = /home/nitin/mediafix-helper
-ExecStart = /usr/bin/python3 /home/nitin/mediafix-helper/helper.py
-Restart = no
-TimeoutStopSec = 30
-StandardOutput = journal
-StandardError = journal
+Type=simple
+User=nitin
+Group=nitin
+Environment=HOME=/home/nitin
+Environment=PYTHONUNBUFFERED=1
+# programs (root-owned, read-only for the service) and working files: see install.sh (JTV-18)
+Environment=MEDIAFIX_BIN=/opt/mediafix
+Environment=MEDIAFIX_STATE=/var/lib/mediafix
+Environment=AUDIOFIX_WORK_DIR=/var/lib/mediafix/work
+Environment=AUDIOFIX_LOG_DIR=/var/lib/mediafix/logs
+WorkingDirectory=/var/lib/mediafix
+ExecStart=/usr/bin/python3 /opt/mediafix/helper.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
 
 [Install]
-WantedBy = multi-user.target
+WantedBy=multi-user.target

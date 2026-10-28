@@ -90,14 +90,26 @@ it retries with cleaned-up names: title + year from the file name, then from the
 Run it directly: `fix-subtitles.sh [--dry-run] <video-file>` (`--dry-run` downloads to a temp
 folder only; `--names <video-file>` just prints the cleaned-up names it would try).
 
+## Where it runs (Jellyfin box, CT 105) — since 28 Oct 2026 (JTV-18)
+
+- Programs: `/opt/mediafix/` (root-owned: `fix-subtitles.sh`, `fix-movie-audio.sh`, `helper.py`, own `venv` with
+  subliminal 2.7.1). Working files and logs: `/var/lib/mediafix/{work,logs}` (user nitin). Service:
+  `/etc/systemd/system/mediafix-helper.service` (copy of `mediafix-helper/mediafix-helper.service`).
+- Install or update from this repo with `mediafix-helper/install.sh` (command at the top of that file). Never edit the
+  copies on the server.
+- Allowed folders = Jellyfin's own library folders, asked from Jellyfin every 5 min (`~/.audiofix.jellyfin`), so movies
+  can move between NAS shares without changing anything here. The scripts refuse a library root by looking at the folder
+  (a mount point or a folder with 2+ sub-folders), not by `/MEDIA/...` names.
+- Before: `/home/nitin/jellyfin_audio_fix` + `/home/nitin/mediafix-helper` (a home clean-up on 28 Oct removed the scripts,
+  JTV-16). Old copies kept in `/root/old-before-JTV-18` on CT 105.
+
 ## Setup notes (for future reference, not a turnkey installer)
 
 - Both scripts expect an SMB credentials file at `~/.audiofix.auth` (`username=` /
   `password=` / `domain=`, mode `600`) and a CIFS-mounted media path they can also
   reach read-only for verification.
-- `mediafix-helper/helper.py` hardcodes its two library roots and the two script
-  paths near the top of the file - update `LIBRARY_ROOTS` and `ACTIONS` for a
-  different setup.
+- `mediafix-helper/helper.py` reads the library folders from Jellyfin and the program/state folders from
+  `MEDIAFIX_BIN` / `MEDIAFIX_STATE` (set in the service file).
 - The two `.service` files are the actual systemd units used to run the helper and
   a second, parallel Jellyfin instance for testing - not enabled at boot, started
   manually, since the original server this ran on had only 4GB RAM.

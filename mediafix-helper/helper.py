@@ -13,14 +13,22 @@ HOST = "0.0.0.0"
 PORT = 8099
 
 HOME = os.path.expanduser("~")
+# Programs live in /opt/mediafix (root-owned, installed from the jellyfinNX repo by mediafix-helper/install.sh), working
+# files and logs in /var/lib/mediafix, so a clean-up of home folders or movie folders can never remove them (JTV-18).
+BIN_DIR = os.environ.get("MEDIAFIX_BIN", "/opt/mediafix")
+STATE_DIR = os.environ.get("MEDIAFIX_STATE", "/var/lib/mediafix")
 ACTIONS = {
-    "fix-audio": os.path.join(HOME, "jellyfin_audio_fix", "fix-movie-audio.sh"),
-    "fix-subtitle": os.path.join(HOME, "jellyfin_audio_fix", "fix-subtitles.sh"),
+    "fix-audio": os.path.join(BIN_DIR, "fix-movie-audio.sh"),
+    "fix-subtitle": os.path.join(BIN_DIR, "fix-subtitles.sh"),
 }
-AUDIOFIX_LOG = os.path.join(HOME, "jellyfin_audio_fix", "logs", "audiofix.log")
-PROGRESS_FILE = os.path.join(HOME, "jellyfin_audio_fix", "work", "progress.status")
+AUDIOFIX_LOG = os.path.join(os.environ.get("AUDIOFIX_LOG_DIR", os.path.join(STATE_DIR, "logs")), "audiofix.log")
+PROGRESS_FILE = os.path.join(os.environ.get("AUDIOFIX_WORK_DIR", os.path.join(STATE_DIR, "work")), "progress.status")
 
-LIBRARY_ROOTS = ["/MEDIA/Eng_Movies", "/MEDIA/Hin_Movies", "/MEDIA/Eng_Sitcoms", "/MEDIA/Hin_Sitcoms"]
+# The allowed folders are Jellyfin's own library folders (asked from Jellyfin, so movies can move without changing this
+# file). ~/.audiofix.jellyfin has one "<url> <api_key>" per line; every instance's libraries count.
+JELLYFIN_AUTHFILE = os.environ.get("AUDIOFIX_JELLYFIN_AUTHFILE", os.path.join(HOME, ".audiofix.jellyfin"))
+ROOTS_CACHE_SECONDS = 300
+_roots = {"at": 0.0, "list": []}
 MAX_BODY_BYTES = 8192
 JOB_RETENTION_SECONDS = 30 * 60
 OUTPUT_CAP_BYTES = 8000
@@ -156,6 +164,50 @@ def run_job(job_id, action, resolved_path):
         job["resultStatus"] = result_status
 
 
+def _jellyfin_library_folders():
+    import urllib.request
+    folders = []
+    with open(JELLYFIN_AUTHFILE) as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 2 or line.lstrip().startswith("#"):
+                continue
+            url, key = parts
+            req = urllib.request.Request(url.rstrip("/") + "/Library/VirtualFolders", headers={"X-Emby-Token": key})
+            try:  # an instance that is not running (e.g. the old :8096 one) is skipped
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    for lib in json.load(r):
+                        folders += lib.get("Locations") or []
+            except Exception as exc:  # noqa: BLE001
+                print(f"mediafix-helper: {url} did not answer ({exc})")
+    return folders
+
+
+def _mount_points():
+    out = []
+    with open("/proc/self/mounts") as f:
+        for line in f:
+            dev, target, fstype = line.split()[:3]
+            if fstype in ("cifs", "smb3", "nfs", "nfs4"):
+                out.append(target.replace("\\040", " "))
+    return out
+
+
+def library_roots():
+    """Jellyfin's library folders, refreshed every 5 minutes. If Jellyfin does not answer, the last good list is kept;
+    with none yet, every network mount (the NAS shares) counts."""
+    now = time.time()
+    if now - _roots["at"] > ROOTS_CACHE_SECONDS or not _roots["list"]:
+        try:
+            found = sorted(set(_jellyfin_library_folders()))
+            if found:
+                _roots["list"], _roots["at"] = found, now
+        except Exception as exc:  # noqa: BLE001 - keep serving with the previous list
+            print(f"mediafix-helper: could not read Jellyfin libraries ({exc}); using the last known list")
+            _roots["at"] = now - ROOTS_CACHE_SECONDS + 30  # try again in 30 s
+    return _roots["list"] or _mount_points()
+
+
 def validate_and_resolve(path):
     if not isinstance(path, str) or not path or len(path) > 4096 or "\x00" in path:
         return None, (400, "bad_request", "path must be a non-empty string under 4096 bytes with no NUL byte")
@@ -163,7 +215,8 @@ def validate_and_resolve(path):
     real = os.path.realpath(path)
 
     allowed_root = None
-    for root in LIBRARY_ROOTS:
+    roots = library_roots()
+    for root in roots:
         real_root = os.path.realpath(root)
         if real == real_root:
             return None, (403, "path_not_allowed", "path must be inside a library, not the library root itself")
@@ -175,7 +228,7 @@ def validate_and_resolve(path):
             continue
 
     if allowed_root is None:
-        return None, (403, "path_not_allowed", "path must be under /MEDIA/Eng_Movies or /MEDIA/Hin_Movies")
+        return None, (403, "path_not_allowed", "path must be inside one of Jellyfin's library folders: " + ", ".join(roots))
 
     if not os.path.exists(real):
         return None, (404, "path_not_found", None)

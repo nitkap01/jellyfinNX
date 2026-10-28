@@ -24,14 +24,16 @@ SMB_OP_TIMEOUT_S=60
 SMB_PUT_MIN_MBPS=2
 SMB_PUT_TIMEOUT_FLOOR_S=600
 
-WORK_DIR="${AUDIOFIX_WORK_DIR:-$HOME/jellyfin_audio_fix/work}"
-LOG_DIR="$HOME/jellyfin_audio_fix/logs"
+WORK_DIR="${AUDIOFIX_WORK_DIR:-/var/lib/mediafix/work}"
+LOG_DIR="${AUDIOFIX_LOG_DIR:-/var/lib/mediafix/logs}"
 AUTHFILE="${AUDIOFIX_AUTHFILE:-$HOME/.audiofix.auth}"
 JELLYFIN_AUTHFILE="${AUDIOFIX_JELLYFIN_AUTHFILE:-$HOME/.audiofix.jellyfin}"
 JOURNAL_FILE="$WORK_DIR/audiofix.journal"
 LOCK_FILE="$WORK_DIR/audiofix.lock"
 PROGRESS_STATUS_FILE="$WORK_DIR/progress.status"
-PICKER_ROOTS=("/MEDIA/Eng_Movies" "/MEDIA/Hin_Movies")
+# interactive picker only: MEDIAFIX_PICKER_ROOTS (space-separated), else every NAS share mounted here
+if [ -n "${MEDIAFIX_PICKER_ROOTS:-}" ]; then read -r -a PICKER_ROOTS <<<"$MEDIAFIX_PICKER_ROOTS"
+else mapfile -t PICKER_ROOTS < <(findmnt -rn -t cifs,smb3,nfs,nfs4 -o TARGET 2>/dev/null | sed 's/\\x20/ /g'); fi
 
 DRY_RUN=false
 LRA_THRESHOLD="$LRA_THRESHOLD_DEFAULT"
@@ -45,7 +47,7 @@ usage() {
   cat <<'EOF'
 Usage: fix-movie-audio.sh [--dry-run] [--lra-threshold N] [<movie-folder-or-video-file>]
 
-No path given: opens an interactive picker over /MEDIA/Eng_Movies and /MEDIA/Hin_Movies.
+No path given: opens an interactive picker over the NAS shares mounted here.
 
 After a successful fix, Jellyfin is asked to rescan so it stops serving cached
 stream info. That needs ~/.audiofix.jellyfin (mode 600), one instance per line
@@ -354,9 +356,11 @@ resolve_target() {
     die 2 "Not a file or directory: $target"
   fi
 
-  local depth
-  depth="$(printf '%s' "${target#/MEDIA}" | tr -cd '/' | wc -c)"
-  if [ "$target" = "/MEDIA" ] || [ "$depth" -le 1 ]; then
+  # A library root (a NAS share's mount point, or a folder holding several sub-folders) is refused. Judged from the
+  # folder itself, not from fixed /MEDIA/... names, so movies can move between shares (JTV-18).
+  local subdirs
+  subdirs="$( (find "$target" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | head -2 | wc -l) || true)"
+  if [ "$(findmnt -rn -o TARGET -T "$target" 2>/dev/null)" = "$target" ] || [ "$subdirs" -ge 2 ]; then
     die 2 "Refusing to scan a library root. Point me at a single movie folder or the video file itself."
   fi
 

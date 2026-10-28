@@ -3,11 +3,15 @@ set -euo pipefail
 IFS=$'\n\t'
 export LC_ALL=C
 
-SUBLIMINAL="$HOME/.local/bin/subliminal"
+# own copy in /opt/mediafix/venv (install.sh); the old per-user install is the fallback
+SUBLIMINAL="${MEDIAFIX_SUBLIMINAL:-/opt/mediafix/venv/bin/subliminal}"
+[ -x "$SUBLIMINAL" ] || SUBLIMINAL="$HOME/.local/bin/subliminal"
 AUTHFILE="${AUDIOFIX_AUTHFILE:-$HOME/.audiofix.auth}"
-WORK_DIR="${AUDIOFIX_WORK_DIR:-$HOME/jellyfin_audio_fix/work}"
+WORK_DIR="${AUDIOFIX_WORK_DIR:-/var/lib/mediafix/work}"
 MIN_VIDEO_BYTES=$((100 * 1024 * 1024))
-PICKER_ROOTS=("/MEDIA/Eng_Movies" "/MEDIA/Hin_Movies")
+# interactive picker only: MEDIAFIX_PICKER_ROOTS (space-separated), else every NAS share mounted here
+if [ -n "${MEDIAFIX_PICKER_ROOTS:-}" ]; then read -r -a PICKER_ROOTS <<<"$MEDIAFIX_PICKER_ROOTS"
+else mapfile -t PICKER_ROOTS < <(findmnt -rn -t cifs,smb3,nfs,nfs4 -o TARGET 2>/dev/null | sed 's/\\x20/ /g'); fi
 LANGUAGE="en"
 LOCAL_DIR=""
 DRY_RUN=false
@@ -18,7 +22,7 @@ usage() {
 Usage: fix-subtitles.sh [--dry-run] [<movie-folder-or-video-file>]
        fix-subtitles.sh --names <movie-folder-or-video-file>
 
-No path given: opens an interactive picker over /MEDIA/Eng_Movies and /MEDIA/Hin_Movies.
+No path given: opens an interactive picker over the NAS shares mounted here.
 Downloads the best-matching English subtitle (via subliminal) and saves it
 next to the movie as <name>.en.srt (e.g. Movie.Name.mp4 -> Movie.Name.en.srt, which
 Jellyfin lists as English), overwriting an existing subtitle of that name.
@@ -145,9 +149,11 @@ resolve_target() {
     die 2 "Not a file or directory: $target"
   fi
 
-  local depth
-  depth="$(printf '%s' "${target#/MEDIA}" | tr -cd '/' | wc -c)"
-  if [ "$target" = "/MEDIA" ] || [ "$depth" -le 1 ]; then
+  # A library root (a NAS share's mount point, or a folder holding several sub-folders) is refused. Judged from the
+  # folder itself, not from fixed /MEDIA/... names, so movies can move between shares (JTV-18).
+  local subdirs
+  subdirs="$( (find "$target" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | head -2 | wc -l) || true)"
+  if [ "$(findmnt -rn -o TARGET -T "$target" 2>/dev/null)" = "$target" ] || [ "$subdirs" -ge 2 ]; then
     die 2 "Refusing to scan a library root. Point me at a single movie folder or the video file itself."
   fi
 
