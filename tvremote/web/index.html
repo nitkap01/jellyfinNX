@@ -33,6 +33,17 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .status.allow i, .status.connecting i { background: var(--warn); }
 .status.off i, .status.denied i, .status.offline i { background: var(--bad); }
 .status.allow { color: var(--warn); font-weight: 700; }
+/* top bar: TV status on the left, Jellyfin "Rescan library" on the right */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 28px; padding-left: 4px; }
+.top .status { justify-content: flex-start; min-width: 0; }
+.top .status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top .status i { flex: none; }
+.scan { flex: none; display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 14px;
+  background: var(--key); color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.scan svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.scan.running { color: var(--warn); } .scan.running svg { animation: spin 1s linear infinite; }
+.scan.done { color: var(--ok); } .scan.error { color: var(--bad); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .apps { display: flex; gap: 8px; }
 .app { flex: 1; height: 48px; border-radius: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center;
@@ -93,7 +104,10 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 </head>
 <body>
 <div class="wrap">
-  <div class="status connecting" id="status"><i></i><span id="stxt">Connecting…</span></div>
+  <div class="top">
+    <div class="status connecting" id="status"><i></i><span id="stxt">Connecting…</span></div>
+    <button class="scan" id="scan" aria-label="Rescan the Jellyfin library"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg><span id="scantxt">Rescan library</span></button>
+  </div>
   <div class="apps">
     <button class="app netflix" data-app="netflix">NETFLIX</button>
     <button class="app jflix" data-app="jellyfinflix">JellyfinFlix</button>
@@ -144,7 +158,7 @@ function setStatus(s) { $("#status").className = "status " + s; $("#stxt").textC
 function connectWS() {
   ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
   ws.onopen = () => { wsOpen = true; retry = 0; };
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.tv) setStatus(m.tv); if ("find" in m) showResults(m); };
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.tv) setStatus(m.tv); if ("find" in m) showResults(m); if (m.scan) showScan(m); };
   ws.onclose = () => { wsOpen = false; setStatus("offline"); setTimeout(connectWS, Math.min(2000, 200 * ++retry)); };
 }
 connectWS();
@@ -163,6 +177,19 @@ document.addEventListener("pointerdown", (e) => {
   if (b.dataset.app) send({ app: b.dataset.app }); else key(b.dataset.key);
   const up = () => { b.classList.remove("down"); removeEventListener("pointerup", up); removeEventListener("pointercancel", up); };
   addEventListener("pointerup", up); addEventListener("pointercancel", up);
+});
+
+// ---------- Jellyfin: rescan the library (new files on the NAS show up) ----------
+let scanBusy = false, scanReset;
+function showScan(m) {
+  clearTimeout(scanReset); scanBusy = m.scan === "running";
+  $("#scan").className = "scan " + m.scan;
+  $("#scantxt").textContent = { running: `Scanning ${m.pct || 0}%`, done: "Library updated", error: "Jellyfin not reachable" }[m.scan] || "Rescan library";
+  if (m.scan !== "running") scanReset = setTimeout(() => { $("#scan").className = "scan"; $("#scantxt").textContent = "Rescan library"; }, 6000);
+}
+$("#scan").addEventListener("pointerdown", () => {
+  if (scanBusy || !wsOpen) return;
+  buzz(); scanBusy = true; showScan({ scan: "running", pct: 0 }); send({ rescan: 1 });
 });
 
 // ---------- side bars: drag up = +, down = −; further = faster ----------

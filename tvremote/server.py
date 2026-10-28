@@ -167,12 +167,58 @@ class TV:
 tv = TV()
 
 
+def jf_key():
+    try:
+        return JF_KEY_FILE.read_text().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def jf_scan_state():
+    """The 'Scan Media Library' task: ("Running", 42.0) / ("Idle", None)."""
+    req = urllib.request.Request(JF + "/ScheduledTasks?isHidden=false", headers={"X-Emby-Token": jf_key()})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        t = next((t for t in json.load(r) if t.get("Key") == "RefreshLibrary"), {})
+    return t.get("State", "Idle"), t.get("CurrentProgressPercentage")
+
+
+def jf_rescan():
+    """Start a full library scan (same as Dashboard > Libraries > Scan All Libraries)."""
+    req = urllib.request.Request(JF + "/Library/Refresh", method="POST", headers={"X-Emby-Token": jf_key()})
+    urllib.request.urlopen(req, timeout=5).read()
+
+
+scan_watch = None  # task that reports scan progress to every open phone
+
+
+async def watch_scan():
+    """Tell the phones how far the scan is, every 2 s, until Jellyfin says it is done."""
+    seen_running = False
+    for i in range(1800):  # at most 1 h
+        await asyncio.sleep(2)
+        try:
+            state, pct = await asyncio.to_thread(jf_scan_state)
+        except Exception as e:
+            log.info("scan state: %s", type(e).__name__); continue
+        if state != "Idle":
+            seen_running = True
+        elif seen_running or i >= 5:  # finished (or so quick it was never seen running)
+            await tell({"scan": "done"}); return
+        await tell({"scan": "running", "pct": round(pct or 0)})
+
+
+async def tell(m):
+    msg = json.dumps(m)
+    for p in list(tv.phones):
+        try:
+            await p.send(msg)
+        except Exception:
+            tv.phones.discard(p)
+
+
 def jf_find(q):
     """Library search for the phone: movies and shows whose name contains the letters typed."""
-    try:
-        key = JF_KEY_FILE.read_text().strip()
-    except FileNotFoundError:
-        key = ""
+    key = jf_key()
     if not key:
         return {"need_key": True}
     url = JF + "/Items?" + urllib.parse.urlencode({
@@ -223,6 +269,18 @@ async def phone(ws):
                     log.info("find: %s", type(e).__name__)
                 res["find"] = m.get("n")
                 await ws.send(json.dumps(res)); continue
+            elif m.get("rescan"):
+                global scan_watch
+                if not (scan_watch and not scan_watch.done()):
+                    try:
+                        await asyncio.to_thread(jf_rescan)
+                        log.info("library rescan started")
+                        await tell({"scan": "running", "pct": 0})
+                        scan_watch = asyncio.create_task(watch_scan())
+                    except Exception as e:
+                        log.info("rescan: %s", type(e).__name__)
+                        await ws.send(json.dumps({"scan": "error"}))
+                continue
             elif isinstance(m.get("open"), str) and m["open"].isalnum():
                 ok = await tv.to_app({"open": m["open"]})
             elif isinstance(m.get("search"), str) and m["search"].strip():
