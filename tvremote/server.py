@@ -5,7 +5,7 @@ Snappy by design: the phone keeps one WebSocket open to this server, and this se
 (Samsung remote API, wss :8002). A press is one tiny message each way - no page loads, no new connections.
 First use: the TV asks once to "Allow" this remote; its token is then kept in ~/.secrets/samsung_tv_token.
 """
-import asyncio, base64, json, logging, mimetypes, os, ssl, time, urllib.parse, urllib.request
+import asyncio, base64, json, logging, mimetypes, os, ssl, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 from websockets.asyncio.server import serve
 from websockets.asyncio.client import connect
@@ -207,6 +207,113 @@ async def watch_scan():
         await tell({"scan": "running", "pct": round(pct or 0)})
 
 
+# ---------------------------------------------------------------- now playing + Fix Sync Sub (JTV-19)
+
+MEDIAFIX = os.environ.get("MEDIAFIX", "http://192.168.0.154:8099")   # mediafix-helper on the Jellyfin box
+now_playing = None      # what the TV plays, as sent to the phones (None = nothing)
+sync = {"state": None}  # the current / last Fix Sync Sub job, as sent to the phones
+
+
+def jf_get(path):
+    req = urllib.request.Request(JF + path, headers={"X-Emby-Token": jf_key()})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.load(r)
+
+
+def jf_now():
+    """The film or episode playing on the TV (the session from the TV's address, else any playing session)."""
+    sessions = [x for x in jf_get("/Sessions?activeWithinSeconds=120") if x.get("NowPlayingItem")]
+    if not sessions:
+        return None
+    s = next((x for x in sessions if x.get("RemoteEndPoint", "").split(":")[0] == TV_IP), sessions[0])
+    it, ps = s["NowPlayingItem"], s.get("PlayState") or {}
+    subs = [m for m in it.get("MediaStreams") or [] if m.get("Type") == "Subtitle"]
+    idx = ps.get("SubtitleStreamIndex")
+    cur = next((m for m in subs if m.get("Index") == idx), None)
+    name = it.get("Name", "")
+    if it.get("Type") == "Episode":
+        name = f"{it.get('SeriesName', '')} · S{it.get('ParentIndexNumber', 0)}E{it.get('IndexNumber', 0)} {name}"
+    return {
+        "id": it["Id"], "name": name, "year": it.get("ProductionYear"),
+        "img": (f"{JF}/Items/{it['Id']}/Images/Primary?fillHeight=180&quality=80" if (it.get("ImageTags") or {}).get("Primary")
+                else f"{JF}/Items/{it.get('SeriesId')}/Images/Primary?fillHeight=180&quality=80" if it.get("SeriesId") else None),
+        "pos": round((ps.get("PositionTicks") or 0) / 1e7), "dur": round((it.get("RunTimeTicks") or 0) / 1e7),
+        "paused": bool(ps.get("IsPaused")),
+        "sub": (cur.get("DisplayTitle") or cur.get("Language") or "On") if cur else ("Off" if subs else "None"),
+        "hasSub": any((m.get("Language") or "").lower() in ("en", "eng", "english") or m.get("IsExternal") for m in subs),
+    }
+
+
+async def watch_now():
+    """Every 3 s: tell the phones when what plays (or its pause state) changes; the position moves on the phone itself."""
+    global now_playing
+    while True:
+        try:
+            n = await asyncio.to_thread(jf_now)
+        except Exception as e:
+            log.debug("now: %s", type(e).__name__); n = now_playing
+        key = lambda x: x and (x["id"], x["paused"], x["sub"], x["pos"] // 15)
+        if key(n) != key(now_playing):
+            now_playing = n
+            await tell({"now": n})
+        await asyncio.sleep(3)
+
+
+def item_path(item_id):
+    r = jf_get("/Items?" + urllib.parse.urlencode({"Ids": item_id, "Fields": "Path", "Recursive": "true"}))
+    items = r.get("Items") or []
+    return items[0].get("Path") if items else None
+
+
+def helper(method, path, body=None):
+    req = urllib.request.Request(MEDIAFIX + path, method=method, data=json.dumps(body).encode() if body else None,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        return json.loads(e.read() or b"{}") | {"httpStatus": e.code}
+
+
+async def run_sync(item_id, name):
+    """Start Fix Sync Sub for the film on the TV and report its progress to every phone until it ends."""
+    global sync
+    try:
+        path = await asyncio.to_thread(item_path, item_id)
+        if not path:
+            raise RuntimeError("Jellyfin did not give the file")
+        r = await asyncio.to_thread(helper, "POST", "/jobs", {"action": "fix-sub-sync", "path": path})
+        if not r.get("jobId"):
+            busy = r.get("error") == "busy" or r.get("httpStatus") == 409
+            raise RuntimeError("Another fix is still running - try again in a few minutes" if busy else r.get("detail") or r.get("error") or "helper said no")
+        job = r["jobId"]
+        log.info("fix-sub-sync %s started for %s", job, name)
+        while True:
+            j = await asyncio.to_thread(helper, "GET", f"/jobs/{job}")
+            out = j.get("output") or ""
+            result = next((l[len("RESULT: "):] for l in reversed(out.splitlines()) if l.startswith("RESULT: ")), None)
+            error = next((l[len("ERROR: "):] for l in reversed(out.splitlines()) if l.startswith("ERROR: ")), None)
+            check = next((l for l in reversed(out.splitlines()) if l.startswith("Lines within 1 s")), None)
+            if j.get("state") == "running":
+                sync = {"state": "running", "id": item_id, "name": name, "pct": j.get("progressPercent") or 0,
+                        "phase": j.get("progressPhase") or "Starting"}
+                await tell({"sync": sync})
+                await asyncio.sleep(3)
+                continue
+            ok = j.get("state") == "succeeded"
+            sync = {"state": "done" if ok else "error", "id": item_id, "name": name,
+                    "text": (result or error or ("Finished" if ok else "It did not work")) + (f"\n{check}" if check else "")}
+            log.info("fix-sub-sync %s %s: %s", job, j.get("state"), sync["text"][:200])
+            await tell({"sync": sync})
+            return
+    except Exception as e:
+        sync = {"state": "error", "id": item_id, "name": name, "text": str(e)[:200]}
+        await tell({"sync": sync})
+
+
+sync_task = None
+
+
 async def tell(m):
     msg = json.dumps(m)
     for p in list(tv.phones):
@@ -253,7 +360,7 @@ async def phone(ws):
     if ws.request.path.startswith("/app"):
         return await jflix(ws)
     tv.phones.add(ws)
-    await ws.send(json.dumps({"tv": tv.status}))
+    await ws.send(json.dumps({"tv": tv.status, "now": now_playing, "sync": sync}))
     try:
         async for raw in ws:
             t0 = time.perf_counter()
@@ -280,6 +387,12 @@ async def phone(ws):
                     except Exception as e:
                         log.info("rescan: %s", type(e).__name__)
                         await ws.send(json.dumps({"scan": "error"}))
+                continue
+            elif m.get("syncsub"):
+                global sync_task
+                n = now_playing
+                if n and not (sync_task and not sync_task.done()):
+                    sync_task = asyncio.create_task(run_sync(n["id"], n["name"]))
                 continue
             elif isinstance(m.get("open"), str) and m["open"].isalnum():
                 ok = await tv.to_app({"open": m["open"]})
@@ -322,6 +435,7 @@ def http(conn, req):
 
 async def main():
     asyncio.create_task(tv.run())
+    asyncio.create_task(watch_now())
     async with serve(phone, "0.0.0.0", PORT, process_request=http, compression=None, ping_interval=20):
         log.info("tvremote on :%d -> TV %s", PORT, TV_IP)
         await asyncio.Future()

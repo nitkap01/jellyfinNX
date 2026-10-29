@@ -20,6 +20,7 @@ STATE_DIR = os.environ.get("MEDIAFIX_STATE", "/var/lib/mediafix")
 ACTIONS = {
     "fix-audio": os.path.join(BIN_DIR, "fix-movie-audio.sh"),
     "fix-subtitle": os.path.join(BIN_DIR, "fix-subtitles.sh"),
+    "fix-sub-sync": os.path.join(BIN_DIR, "fix-sub-sync.py"),  # re-time existing subtitles to the speech (JTV-19)
 }
 AUDIOFIX_LOG = os.path.join(os.environ.get("AUDIOFIX_LOG_DIR", os.path.join(STATE_DIR, "logs")), "audiofix.log")
 PROGRESS_FILE = os.path.join(os.environ.get("AUDIOFIX_WORK_DIR", os.path.join(STATE_DIR, "work")), "progress.status")
@@ -131,7 +132,8 @@ def run_job(job_id, action, resolved_path):
     }
     started_epoch = time.time()
     try:
-        proc = subprocess.run(
+        # read the output while it runs: "PROGRESS <pct> <text>" lines (fix-sub-sync.py) show up in GET /jobs/<id> at once
+        proc = subprocess.Popen(
             [script, resolved_path],
             shell=False,
             stdin=subprocess.DEVNULL,
@@ -140,8 +142,23 @@ def run_job(job_id, action, resolved_path):
             cwd=HOME,
             env=env,
         )
-        exit_code = proc.returncode
-        output = proc.stdout.decode("utf-8", errors="replace")
+        parts = []
+        for raw in proc.stdout:
+            line = raw.decode("utf-8", errors="replace")
+            parts.append(line)
+            with jobs_lock:
+                job = jobs.get(job_id)
+                if job is not None:
+                    if line.startswith("PROGRESS "):
+                        bits = line.rstrip("\n").split(" ", 2)
+                        try:
+                            job["progressPercent"] = int(bits[1])
+                        except (IndexError, ValueError):
+                            pass
+                        job["progressPhase"] = bits[2] if len(bits) > 2 else None
+                    job["output"] = "".join(parts)[-OUTPUT_CAP_BYTES:]
+        exit_code = proc.wait()
+        output = "".join(parts)
     except Exception as exc:  # noqa: BLE001 - report any launch failure as a failed job
         exit_code = -1
         output = f"helper failed to launch script: {exc}"
@@ -377,7 +394,7 @@ class Handler(BaseHTTPRequestHandler):
         path = body.get("path")
 
         if action not in ACTIONS:
-            self._send_json(400, {"error": "bad_request", "detail": "action must be fix-audio or fix-subtitle"})
+            self._send_json(400, {"error": "bad_request", "detail": "action must be fix-audio, fix-subtitle or fix-sub-sync"})
             return
 
         resolved, err = validate_and_resolve(path)

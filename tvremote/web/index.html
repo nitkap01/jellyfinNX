@@ -24,7 +24,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
   touch-action: none; -webkit-text-size-adjust: 100%; }
 body { position: fixed; inset: 0; }
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; touch-action: none; }
-.wrap { position: absolute; inset: 0; max-width: 480px; margin: 0 auto; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 12px;
+.wrap { position: absolute; inset: 0; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
   padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 14px); }
 
 .status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--muted); height: 20px; }
@@ -53,7 +53,23 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .app.jflix { background: linear-gradient(135deg, #5b3df5, #b04cff); font-size: 14px; }
 .down { transform: scale(.94); filter: brightness(1.3); }
 
-.main { display: grid; grid-template-columns: 1fr 66px; gap: 10px; min-height: 0; position: relative; }
+.main { flex: 1; display: grid; grid-template-columns: 1fr 66px; gap: 10px; min-height: 0; position: relative; }
+
+/* now playing on the TV (JTV-19): poster, title, where it is, and Fix Sync Sub */
+.now { display: flex; gap: 11px; align-items: center; background: #15171d; border: 1px solid var(--line); border-radius: 18px; padding: 8px 10px 8px 8px; }
+.now[hidden] { display: none; }
+.now .pic { flex: none; width: 40px; height: 60px; border-radius: 8px; background: #1d2028 center/cover no-repeat; }
+.now .info { flex: 1; min-width: 0; }
+.now .info b { display: block; font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now .info small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now .bar { height: 3px; border-radius: 2px; background: #ffffff14; margin-top: 7px; overflow: hidden; }
+.now .bar i { display: block; height: 100%; width: 0; background: #7b5cff; }
+.now .fix { flex: none; height: 38px; padding: 0 12px; border-radius: 19px; background: var(--key); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.now .fix.running { color: var(--warn); } .now .fix.done { color: var(--ok); } .now .fix.error { color: var(--bad); }
+.now .fix:disabled { opacity: .45; }
+.syncmsg { font-size: 12px; color: var(--muted); background: #15171d; border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; white-space: pre-line; margin-top: -4px; }
+.syncmsg[hidden] { display: none; }
+.syncmsg.done { color: var(--ok); } .syncmsg.error { color: var(--bad); }
 .results { position: absolute; left: 0; top: 0; bottom: 0; right: 0; z-index: 3; background: #101217f2; border: 1px solid var(--line);
   border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; }
 .results[hidden] { display: none; }
@@ -113,6 +129,12 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
     <button class="app jflix" data-app="jellyfinflix">JellyfinFlix</button>
     <button class="app prime" data-app="prime">prime video</button>
   </div>
+  <div class="now" id="now" hidden>
+    <div class="pic" id="nowpic"></div>
+    <div class="info"><b id="nowname"></b><small id="nowmeta"></small><div class="bar"><i id="nowbar"></i></div></div>
+    <button class="fix" id="fix" aria-label="Fix the subtitle timing for this film">Fix Sync Sub</button>
+  </div>
+  <div class="syncmsg" id="syncmsg" hidden></div>
   <form class="search" id="search" autocomplete="off">
     <input id="q" type="search" enterkeyhint="search" placeholder="Search a movie name…" aria-label="Search a movie name">
     <button class="go" type="submit" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></button>
@@ -158,7 +180,7 @@ function setStatus(s) { $("#status").className = "status " + s; $("#stxt").textC
 function connectWS() {
   ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
   ws.onopen = () => { wsOpen = true; retry = 0; };
-  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.tv) setStatus(m.tv); if ("find" in m) showResults(m); if (m.scan) showScan(m); };
+  ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.tv) setStatus(m.tv); if ("find" in m) showResults(m); if (m.scan) showScan(m); if ("now" in m) showNow(m.now); if (m.sync) showSync(m.sync); };
   ws.onclose = () => { wsOpen = false; setStatus("offline"); setTimeout(connectWS, Math.min(2000, 200 * ++retry)); };
 }
 connectWS();
@@ -190,6 +212,42 @@ function showScan(m) {
 $("#scan").addEventListener("pointerdown", () => {
   if (scanBusy || !wsOpen) return;
   buzz(); scanBusy = true; showScan({ scan: "running", pct: 0 }); send({ rescan: 1 });
+});
+
+// ---------- now playing + Fix Sync Sub ----------
+let now = null, nowAt = 0, syncing = false, msgT;
+const clock = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+function drawNow() {
+  if (!now) return;
+  const pos = Math.min(now.dur || 1e9, now.pos + (now.paused ? 0 : (Date.now() - nowAt) / 1000));
+  $("#nowmeta").textContent = `${clock(pos)} / ${clock(now.dur)}${now.paused ? " · Paused" : ""} · Subtitles: ${now.sub}`;
+  $("#nowbar").style.width = now.dur ? (100 * pos / now.dur).toFixed(1) + "%" : "0";
+}
+function showNow(n) {
+  now = n; nowAt = Date.now(); $("#now").hidden = !n;
+  if (!n) return;
+  $("#nowname").textContent = n.name + (n.year ? ` (${n.year})` : "");
+  $("#nowpic").style.backgroundImage = n.img ? `url('${n.img}')` : "";
+  if (!syncing) { $("#fix").disabled = !n.hasSub; $("#fix").title = n.hasSub ? "" : "No English subtitle yet: use Fetch Subtitle first"; }
+  drawNow();
+}
+setInterval(drawNow, 1000);
+function showSync(s) {
+  clearTimeout(msgT);
+  syncing = s.state === "running";
+  const b = $("#fix"), msg = $("#syncmsg");
+  b.className = "fix " + (s.state || "");
+  b.textContent = syncing ? `Syncing ${s.pct || 0}%` : s.state === "done" ? "Synced ✓" : s.state === "error" ? "Not synced" : "Fix Sync Sub";
+  b.disabled = syncing;
+  if (!s.state) { msg.hidden = true; return; }
+  msg.hidden = false; msg.className = "syncmsg " + s.state;
+  msg.textContent = syncing ? `${s.name}: ${s.phase}… (takes about 3–6 minutes)` : `${s.name}: ${s.text}`;
+  if (!syncing) msgT = setTimeout(() => { msg.hidden = true; b.className = "fix"; b.textContent = "Fix Sync Sub"; if (now) b.disabled = !now.hasSub; }, 60000);
+}
+$("#fix").addEventListener("pointerdown", () => {
+  if (syncing || !now || !wsOpen || $("#fix").disabled) return;
+  buzz(15); showSync({ state: "running", name: now.name, pct: 0, phase: "Starting" }); send({ syncsub: 1 });
 });
 
 // ---------- side bars: drag up = +, down = −; further = faster ----------

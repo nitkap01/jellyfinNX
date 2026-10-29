@@ -10,7 +10,8 @@ USER_NAME=nitin
 SUBLIMINAL_VERSION=${SUBLIMINAL_VERSION:-2.7.1}
 
 install -d -o root -g root -m 755 /opt/mediafix
-install -o root -g root -m 755 "$SRC/scripts/fix-subtitles.sh" "$SRC/scripts/fix-movie-audio.sh" "$SRC/mediafix-helper/helper.py" /opt/mediafix/
+install -o root -g root -m 755 "$SRC/scripts/fix-subtitles.sh" "$SRC/scripts/fix-movie-audio.sh" "$SRC/scripts/fix-sub-sync.py" \
+  "$SRC/mediafix-helper/helper.py" /opt/mediafix/
 cat > /opt/mediafix/README.txt <<'TXT'
 IN USE - do not delete. Programs behind Jellyfin's "Fetch Subtitle" and "Fix Audio" buttons (mediafix-helper service).
 Source: jellyfinNX repo (scripts/, mediafix-helper/); update with mediafix-helper/install.sh. Working files: /var/lib/mediafix.
@@ -19,7 +20,12 @@ if [ ! -x /opt/mediafix/venv/bin/subliminal ]; then
   python3 -m venv /opt/mediafix/venv
   /opt/mediafix/venv/bin/pip install -q "subliminal==$SUBLIMINAL_VERSION"
 fi
+# Fix Sync Sub (JTV-19): Whisper speech model, downloaded once into /opt/mediafix/models
+/opt/mediafix/venv/bin/python -c "import faster_whisper" 2>/dev/null || /opt/mediafix/venv/bin/pip install -q "faster-whisper==${FASTER_WHISPER_VERSION:-1.2.1}"
+install -d -o root -g root -m 755 /opt/mediafix/models
+/opt/mediafix/venv/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8', download_root='/opt/mediafix/models')" >/dev/null
 chown -R root:root /opt/mediafix
+chmod -R a+rX /opt/mediafix   # the service user reads the model files
 
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 755 /var/lib/mediafix
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 700 /var/lib/mediafix/work /var/lib/mediafix/logs
