@@ -158,7 +158,7 @@ def clean(anchors):
     return keep
 
 
-def sections(anchors):
+def sections(anchors, min_points=4):
     """Consecutive anchors (in subtitle time) with about the same shift; a new section starts when two in a row agree on
     a different shift. Each section: dict(first, last, points)."""
     out = []
@@ -176,11 +176,15 @@ def sections(anchors):
             merged[-1]["points"] += s["points"]; merged[-1]["last"] = s["last"]
         else:
             merged.append(s)
-    # a small group right next to a bigger one with almost the same shift is the joint area, not a section of its own
+    # A section needs min_points matched lines: a couple of wrong matches once made a false +216 s section in Gonjiam.
+    # Smaller groups are dropped (their lines follow the neighbouring section).
+    big = [s for s in merged if len(s["points"]) >= min_points]
+    if not big:
+        big = [max(merged, key=lambda s: len(s["points"]))]
+    # Neighbours less than 3.5 s apart are one section that drifts (frame-rate mismatch, Gonjiam): fit() stretches it.
     final = []
-    for s in [s for s in merged if len(s["points"]) >= 2] or merged:
-        if final and min(len(s["points"]), len(final[-1]["points"])) < 4 and \
-                abs(median([e for _, e in s["points"]]) - median([e for _, e in final[-1]["points"]])) <= 3:
+    for s in big:
+        if final and abs(median([e for _, e in s["points"][:6]]) - median([e for _, e in final[-1]["points"][-6:]])) <= 3.5:
             final[-1]["points"] += s["points"]; final[-1]["last"] = s["last"]
         else:
             final.append(s)
@@ -291,7 +295,8 @@ def main():
     if len(anchors) < 6:
         say(f"ERROR: could match only {len(anchors)} spoken lines to the subtitle - it may be for a different film or "
             "language. Nothing changed."); return 4
-    secs_ = sections(anchors)
+    need = 5 if translated else 4
+    secs_ = sections(anchors, need)
     say("First look: " + "; ".join(f"from {fmt(s['first'])[:8]} off by {median([d for _, d in s['points']]):+.1f} s" for s in secs_))
 
     # place every joint exactly: transcribe the stretch between the two sections in full
@@ -306,7 +311,10 @@ def main():
         for s in range(int(lo), int(hi), 120):
             heard += ears.hear(video, s, min(125, hi - s))
     anchors = clean(anchors_from(heard, subs, translated))
-    secs_ = sections(anchors)
+    secs_ = sections(anchors, need)
+    # only lines that belong to a kept section are used for the shift and the check
+    kept = {p for s in secs_ for p in s["points"]}
+    anchors = [p for p in anchors if p in kept]
 
     # one shift function per section; the joint sits in the largest pause between the last line of one section and
     # the first line of the next
@@ -331,7 +339,8 @@ def main():
     say(f"Lines within 1 s of the speech: before {good_before:.0%}, after {good_after:.0%} ({len(anchors)} lines checked, "
         f"median error after {median(after):.2f} s)")
 
-    if good_before >= 0.8 and median(before) < 0.5:
+    # already good, and a change would not make it clearly better: leave it alone
+    if good_before >= 0.75 and good_after <= good_before + 0.05:
         progress(100, "Already in sync"); say("RESULT: already in sync - nothing changed."); return 0
     if good_after < 0.6 or median(after) > 1.0 or good_after <= good_before:
         progress(100, "Could not sync safely")

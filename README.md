@@ -103,6 +103,17 @@ folder only; `--names <video-file>` just prints the cleaned-up names it would tr
 - Before: `/home/nitin/jellyfin_audio_fix` + `/home/nitin/mediafix-helper` (a home clean-up on 28 Oct removed the scripts,
   JTV-16). Old copies kept in `/root/old-before-JTV-18` on CT 105.
 
+## Fix Sync Sub (JTV-19, 29 Oct 2026)
+
+`/opt/mediafix/fix-sub-sync.py [--dry-run] [--sub FILE] VIDEO` re-times the film's English subtitle to the speech:
+Whisper (small, CPU, in `/opt/mediafix/models`) listens to a clip every 4 minutes (non-English audio is translated),
+sentences are matched to subtitle lines, lines are grouped into sections with their own shift (a different cut) or a
+slow stretch (frame-rate mismatch), joints are placed by transcribing that stretch in full. It replaces the file only
+when the check passes (old file kept as `.before-sync-fix.bak`), and says "already in sync" or "could not sync safely"
+otherwise. 3–6 minutes per film. Started from the phone remote (tvremote.home: now-playing card → **Fix Sync Sub**) or
+as helper action `fix-sub-sync`. Tested: Dyatlov (4 sections) and Gonjiam (Korean, drift) both within 1 s of the
+manual fixes on every line.
+
 ## Setup notes (for future reference, not a turnkey installer)
 
 - Both scripts expect an SMB credentials file at `~/.audiofix.auth` (`username=` /

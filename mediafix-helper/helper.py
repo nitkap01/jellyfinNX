@@ -143,7 +143,7 @@ def run_job(job_id, action, resolved_path):
             env=env,
         )
         parts = []
-        for raw in proc.stdout:
+        for raw in iter(proc.stdout.readline, b""):  # line by line (iterating the pipe would wait for 8 KB chunks)
             line = raw.decode("utf-8", errors="replace")
             parts.append(line)
             with jobs_lock:
@@ -358,6 +358,8 @@ class Handler(BaseHTTPRequestHandler):
                     "finishedAt": job.get("finishedAt"),
                     "elapsedSeconds": int(elapsed),
                     "resultStatus": job.get("resultStatus"),
+                    "progressPercent": job.get("progressPercent"),
+                    "progressPhase": job.get("progressPhase"),
                     "output": job.get("output", ""),
                 })
             return
