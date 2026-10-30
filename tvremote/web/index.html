@@ -57,7 +57,25 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 
 /* now playing on the TV (JTV-19): poster, title, where it is, and Fix Sync Sub */
 .now { display: flex; gap: 11px; align-items: center; background: #15171d; border: 1px solid var(--line); border-radius: 18px; padding: 8px 10px 8px 8px; }
-.now[hidden] { display: none; }
+/* JTV-20 mini player: the row folds to nothing (0fr → 1fr) so the remote above grows and shrinks smoothly */
+.np { display: grid; grid-template-rows: 0fr; margin-top: -12px; opacity: 0; transform: translateY(18px) scale(.97);
+  transition: grid-template-rows .5s cubic-bezier(.2,.8,.2,1), margin-top .5s cubic-bezier(.2,.8,.2,1), opacity .35s ease, transform .5s cubic-bezier(.2,.8,.2,1); }
+.np.show { grid-template-rows: 1fr; margin-top: 0; opacity: 1; transform: none; }
+.npin { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+.np.show .now { animation: nowin .6s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes nowin { from { box-shadow: 0 0 0 0 #7b5cff00; } 35% { box-shadow: 0 0 0 6px #7b5cff33; } to { box-shadow: 0 0 0 0 #7b5cff00; } }
+.now { background: linear-gradient(135deg, #1a1830, #15171d 60%); }
+.now .pic { position: relative; overflow: hidden; }
+.eq { position: absolute; right: 3px; bottom: 3px; display: flex; gap: 2px; align-items: flex-end; height: 12px; padding: 2px 3px; border-radius: 4px; background: #000a; }
+.eq i { width: 2px; height: 30%; background: #b9a8ff; border-radius: 1px; animation: eq 1s ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: -.35s; } .eq i:nth-child(3) { animation-delay: -.7s; }
+@keyframes eq { 0%,100% { height: 25%; } 50% { height: 100%; } }
+.now.paused .eq i { animation-play-state: paused; height: 30%; }
+.pp { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, #5b3df5, #b04cff); box-shadow: 0 4px 14px #7b5cff55; transition: transform .12s, filter .12s; }
+.pp:active, .pp.down { transform: scale(.9); filter: brightness(1.2); }
+.pp svg { width: 20px; height: 20px; fill: currentColor; }
+.pp .i-play { display: none; margin-left: 2px; } .now.paused .pp .i-play { display: block; } .now.paused .pp .i-pause { display: none; }
 .now .pic { flex: none; width: 40px; height: 60px; border-radius: 8px; background: #1d2028 center/cover no-repeat; }
 .now .info { flex: 1; min-width: 0; }
 .now .info b { display: block; font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -129,12 +147,6 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
     <button class="app jflix" data-app="jellyfinflix">JellyfinFlix</button>
     <button class="app prime" data-app="prime">prime video</button>
   </div>
-  <div class="now" id="now" hidden>
-    <div class="pic" id="nowpic"></div>
-    <div class="info"><b id="nowname"></b><small id="nowmeta"></small><div class="bar"><i id="nowbar"></i></div></div>
-    <button class="fix" id="fix" aria-label="Fix the subtitle timing for this film">Fix Sync Sub</button>
-  </div>
-  <div class="syncmsg" id="syncmsg" hidden></div>
   <form class="search" id="search" autocomplete="off">
     <input id="q" type="search" enterkeyhint="search" placeholder="Search a movie name…" aria-label="Search a movie name">
     <button class="go" type="submit" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></button>
@@ -157,6 +169,16 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
     <button class="k" data-key="PLAYPAUSE" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path d="m6 4 8 8-8 8z"/><path d="M17 5v14M21 5v14"/></svg></button>
     <button class="k power" data-key="KEY_POWER" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
   </div>
+  <!-- JTV-20: now playing as a mini player at the bottom; slides in when something plays, folds away when nothing does -->
+  <div class="np" id="np" aria-live="polite"><div class="npin">
+    <div class="syncmsg" id="syncmsg" hidden></div>
+    <div class="now" id="now">
+      <div class="pic" id="nowpic"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <div class="info"><b id="nowname"></b><small id="nowmeta"></small><div class="bar"><i id="nowbar"></i></div></div>
+      <button class="pp" id="pp" aria-label="Pause"><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.3"/><rect x="14" y="5" width="4" height="14" rx="1.3"/></svg><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></button>
+      <button class="fix" id="fix" aria-label="Fix the subtitle timing for this film">Sync Sub</button>
+    </div>
+  </div></div>
 </div>
 <script>
 "use strict";
@@ -225,8 +247,12 @@ function drawNow() {
   $("#nowbar").style.width = now.dur ? (100 * pos / now.dur).toFixed(1) + "%" : "0";
 }
 function showNow(n) {
-  now = n; nowAt = Date.now(); $("#now").hidden = !n;
+  now = n; nowAt = Date.now();
+  $("#np").classList.toggle("show", !!n);   // slides in / folds away (the last item stays visible while it folds)
   if (!n) return;
+  $("#now").classList.toggle("paused", !!n.paused);
+  $("#pp").setAttribute("aria-label", n.paused ? "Play" : "Pause");
+  playing = !n.paused;                      // the round play/pause key below follows the real state too
   $("#nowname").textContent = n.name + (n.year ? ` (${n.year})` : "");
   $("#nowpic").style.backgroundImage = n.img ? `url('${n.img}')` : "";
   if (!syncing) { $("#fix").disabled = !n.hasSub; $("#fix").title = n.hasSub ? "" : "No English subtitle yet: use Fetch Subtitle first"; }
@@ -238,13 +264,19 @@ function showSync(s) {
   syncing = s.state === "running";
   const b = $("#fix"), msg = $("#syncmsg");
   b.className = "fix " + (s.state || "");
-  b.textContent = syncing ? `Syncing ${s.pct || 0}%` : s.state === "done" ? "Synced ✓" : s.state === "error" ? "Not synced" : "Fix Sync Sub";
+  b.textContent = syncing ? `Syncing ${s.pct || 0}%` : s.state === "done" ? "Synced ✓" : s.state === "error" ? "Not synced" : "Sync Sub";
   b.disabled = syncing;
   if (!s.state) { msg.hidden = true; return; }
   msg.hidden = false; msg.className = "syncmsg " + s.state;
   msg.textContent = syncing ? `${s.name}: ${s.phase}… (takes about 3–6 minutes)` : `${s.name}: ${s.text}`;
-  if (!syncing) msgT = setTimeout(() => { msg.hidden = true; b.className = "fix"; b.textContent = "Fix Sync Sub"; if (now) b.disabled = !now.hasSub; }, 60000);
+  if (!syncing) msgT = setTimeout(() => { msg.hidden = true; b.className = "fix"; b.textContent = "Sync Sub"; if (now) b.disabled = !now.hasSub; }, 60000);
 }
+$("#pp").addEventListener("pointerdown", () => {
+  if (!now || !wsOpen) return;
+  buzz(12); const b = $("#pp"); b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 150);
+  now.pos += now.paused ? 0 : (Date.now() - nowAt) / 1000; now.paused = !now.paused; showNow(now); // answer at once; Jellyfin confirms
+  send({ np: now.paused ? "pause" : "play" });
+});
 $("#fix").addEventListener("pointerdown", () => {
   if (syncing || !now || !wsOpen || $("#fix").disabled) return;
   buzz(15); showSync({ state: "running", name: now.name, pct: 0, phase: "Starting" }); send({ syncsub: 1 });

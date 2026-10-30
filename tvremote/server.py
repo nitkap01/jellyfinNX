@@ -234,7 +234,7 @@ def jf_now():
     if it.get("Type") == "Episode":
         name = f"{it.get('SeriesName', '')} · S{it.get('ParentIndexNumber', 0)}E{it.get('IndexNumber', 0)} {name}"
     return {
-        "id": it["Id"], "name": name, "year": it.get("ProductionYear"),
+        "id": it["Id"], "sid": s.get("Id"), "name": name, "year": it.get("ProductionYear"),
         "img": (f"{JF}/Items/{it['Id']}/Images/Primary?fillHeight=180&quality=80" if (it.get("ImageTags") or {}).get("Primary")
                 else f"{JF}/Items/{it.get('SeriesId')}/Images/Primary?fillHeight=180&quality=80" if it.get("SeriesId") else None),
         "pos": round((ps.get("PositionTicks") or 0) / 1e7), "dur": round((it.get("RunTimeTicks") or 0) / 1e7),
@@ -257,6 +257,13 @@ async def watch_now():
             now_playing = n
             await tell({"now": n})
         await asyncio.sleep(3)
+
+
+def jf_control(sid, what):
+    """JTV-20: play / pause what plays on the TV, through Jellyfin (works for any Jellyfin player)."""
+    cmd = {"playpause": "PlayPause", "play": "Unpause", "pause": "Pause"}[what]
+    req = urllib.request.Request(f"{JF}/Sessions/{sid}/Playing/{cmd}", method="POST", data=b"", headers={"X-Emby-Token": jf_key()})
+    urllib.request.urlopen(req, timeout=5).read()
 
 
 def item_path(item_id):
@@ -357,6 +364,7 @@ async def jflix(ws):
 
 
 async def phone(ws):
+    global now_playing  # JTV-20: play/pause refreshes it straight away
     if ws.request.path.startswith("/app"):
         return await jflix(ws)
     tv.phones.add(ws)
@@ -387,6 +395,18 @@ async def phone(ws):
                     except Exception as e:
                         log.info("rescan: %s", type(e).__name__)
                         await ws.send(json.dumps({"scan": "error"}))
+                continue
+            elif m.get("np") in ("playpause", "play", "pause"):
+                n = now_playing
+                if n and n.get("sid"):
+                    try:
+                        await asyncio.to_thread(jf_control, n["sid"], m["np"])
+                        await asyncio.sleep(0.4)
+                        now_playing = await asyncio.to_thread(jf_now)  # show the new state at once, not after the 3 s check
+                        await tell({"now": now_playing})
+                    except Exception as e:
+                        log.info("np: %s", type(e).__name__)
+                        await ws.send(json.dumps({"now": now_playing, "nperr": 1}))
                 continue
             elif m.get("syncsub"):
                 global sync_task
