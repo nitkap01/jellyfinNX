@@ -1,6 +1,6 @@
 // "More Info" overlay: artwork, facts, Play/Resume, My List, More (Fix Audio / Fetch Subtitle / genres + cast),
 // seasons + episodes, More Like This. Kept calm on purpose: one meta line, a 3-line overview, one row of pill buttons.
-import { el, debounce, fmtRuntime, epLabel, airedLabel, progressPct, metrics, setFlag } from '../util.js';
+import { el, debounce, fmtRuntime, epLabel, airedLabel, agoLabel, progressPct, metrics, setFlag } from '../util.js';
 import { app } from '../app.js';
 import { S, get, send, COMMON, slim, backdropImg, logoImg, invalidate } from '../api.js';
 import { Rows } from '../ui/rows.js';
@@ -34,6 +34,7 @@ function build() {
   D.meta = el('div', 'd-meta', info);
   D.metaT = el('span', '', D.meta);
   D.chip = el('span', 'd-chip', D.meta); // small "Audio fixed" / "Fixing audio" chip next to the facts
+  D.ago = el('div', 'd-ago', info); // JTV-27: "32 years ago" under the facts (episodes)
   D.ov = el('div', 'd-ov', info);
   D.prog = el('div', 'd-prog', info);
   D.more = el('div', 'd-more', root);
@@ -129,6 +130,7 @@ function fillInfo(it, f) {
   const aired = airedLabel(it.PremiereDate ? it : f || it); // JTV-27: when this episode aired
   if (aired) m.push(aired);
   D.metaT.textContent = m.join('   ·   ');
+  D.ago.textContent = agoLabel(it.PremiereDate ? it : f || it);
   D.ov.textContent = it.Overview || '';
   const p = target ? progressPct(target) : 0;
   D.prog.textContent = p > 0 && p < 99 && target.RunTimeTicks ? Math.round(((100 - p) / 100) * target.RunTimeTicks / 6e8) + ' min left' : '';

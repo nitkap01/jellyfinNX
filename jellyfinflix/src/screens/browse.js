@@ -1,5 +1,5 @@
 // Home / Shows / Movies / My List: billboard on top, rows of cards below.
-import { el, debounce, mark, fmtRuntime, epLabel, airedLabel, onIdle, setFlag, progressPct } from '../util.js';
+import { el, debounce, mark, fmtRuntime, epLabel, airedLabel, agoLabel, onIdle, setFlag, progressPct } from '../util.js';
 import { app } from '../app.js';
 import { store } from '../store.js';
 import { S, backdropImg, logoImg, invalidate } from '../api.js';
@@ -26,6 +26,7 @@ export function browseScreen(host, cfg) {
     H.logo.onerror = () => H.logoBox.classList.remove('has');
     H.title = el('div', 'h-title', H.logoBox);
     H.meta = el('div', 'h-meta', h);
+    H.ago = el('div', 'h-ago', h); // JTV-27: "32 years ago" under the facts (episodes; the line keeps its height so nothing jumps)
     H.ov = el('div', 'h-ov', h);
     H.box = el('div', 'h-btns', h);
     H.btns = []; H.acts = []; H.sig = '';
@@ -75,6 +76,7 @@ export function browseScreen(host, cfg) {
     const aired = airedLabel(it); // JTV-27
     if (aired) m.push(aired);
     H.meta.textContent = m.join('   ·   ');
+    H.ago.textContent = agoLabel(it);
     H.ov.textContent = it.Overview || '';
     target = it; setHeroBtns(it);   // buttons always match the title shown (also for a focused card in the first row)
   }

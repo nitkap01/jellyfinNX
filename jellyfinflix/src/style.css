@@ -60,7 +60,8 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .h-logo.has .h-title { display: none; }
 .h-title { font-size: 88px; font-weight: 900; line-height: .95; letter-spacing: -.02em; text-transform: uppercase; max-height: 168px; overflow: hidden; }
 .h-meta { margin-top: 22px; font-size: 26px; color: var(--mut); height: 35px; white-space: nowrap; overflow: hidden; }
-.h-ov { margin-top: 16px; font-size: 26px; line-height: 1.4; color: #dcdce2; height: 109px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.h-ago { margin-top: 4px; font-size: 22px; color: var(--mut); height: 30px; white-space: nowrap; overflow: hidden; }
+.h-ov { margin-top: 12px; font-size: 26px; line-height: 1.4; color: #dcdce2; height: 109px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .h-btns { margin-top: 30px; display: flex; flex-wrap: nowrap; align-items: center; }
 .h-btns .btn { height: 62px; padding: 0 30px; font-size: 24px; margin-right: 16px; flex: 0 0 auto; }
 .h-btns .btn .ic { margin-right: 12px; font-size: 26px; }
@@ -145,6 +146,8 @@ body[data-screen=profiles] .bg, body[data-screen=search] .bg { opacity: .35; }
 .d-chip.run { background: rgba(184,134,11,.28); color: #f0c14b; }
 .d-chip .ic { display: inline-block; vertical-align: -3px; margin-right: 6px; }
 .d-chip .ic svg { width: 20px; height: 20px; }
+.d-ago { margin-top: 4px; font-size: 22px; color: var(--mut); }
+.d-ago:empty { display: none; }
 .d-prog { font-size: 22px; color: var(--mut); margin-top: 10px; }
 .d-prog:empty { display: none; }
 /* "More" popup above the More button */

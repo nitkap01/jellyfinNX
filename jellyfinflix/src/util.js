@@ -61,6 +61,15 @@ export function airedLabel(it) {
   return s ? 'Aired ' + s : '';
 }
 
+/** JTV-27: how long ago an episode aired, in whole years ("32 years ago"), for the line under the facts */
+export function agoLabel(it, now = Date.now()) {
+  if (!it || it.Type !== 'Episode' || !it.PremiereDate) return '';
+  const t = new Date(it.PremiereDate).getTime();
+  if (isNaN(t) || t > now) return '';
+  const y = Math.floor((now - t) / (365.2425 * 864e5));
+  return y < 1 ? 'Less than a year ago' : y === 1 ? '1 year ago' : y + ' years ago';
+}
+
 export function epLabel(it) {
   if (it.Type !== 'Episode') return '';
   const s = it.ParentIndexNumber, e = it.IndexNumber;
