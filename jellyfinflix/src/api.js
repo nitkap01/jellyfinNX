@@ -144,7 +144,7 @@ export function slim(it) {
   const o = { Id: it.Id, Name: it.Name, Type: it.Type };
   const keys = ['SeriesId', 'SeriesName', 'SeasonId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating',
     'CommunityRating', 'RunTimeTicks', 'ParentBackdropItemId', 'ParentThumbItemId', 'ParentThumbImageTag', 'ParentLogoItemId',
-    'ParentLogoImageTag', 'SeriesPrimaryImageTag', 'MediaType', 'ChildCount'];
+    'ParentLogoImageTag', 'SeriesPrimaryImageTag', 'MediaType', 'ChildCount', 'PremiereDate'];
   for (const k of keys) if (it[k] != null) o[k] = it[k];
   if (it.Path && (it.Type === 'Movie' || it.Type === 'Episode')) o.Path = it.Path;
   if (it.Overview) o.Overview = it.Overview.length > 400 ? it.Overview.slice(0, 400) + '…' : it.Overview;

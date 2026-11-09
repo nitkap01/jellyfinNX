@@ -1,5 +1,5 @@
 // Home / Shows / Movies / My List: billboard on top, rows of cards below.
-import { el, debounce, mark, fmtRuntime, epLabel, onIdle, setFlag, progressPct } from '../util.js';
+import { el, debounce, mark, fmtRuntime, epLabel, airedLabel, onIdle, setFlag, progressPct } from '../util.js';
 import { app } from '../app.js';
 import { store } from '../store.js';
 import { S, backdropImg, logoImg, invalidate } from '../api.js';
@@ -72,6 +72,8 @@ export function browseScreen(host, cfg) {
     if (it.OfficialRating) m.push(it.OfficialRating);
     if (it.Type !== 'Series' && it.RunTimeTicks) m.push(fmtRuntime(it.RunTimeTicks));
     if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
+    const aired = airedLabel(it); // JTV-27
+    if (aired) m.push(aired);
     H.meta.textContent = m.join('   ·   ');
     H.ov.textContent = it.Overview || '';
     target = it; setHeroBtns(it);   // buttons always match the title shown (also for a focused card in the first row)

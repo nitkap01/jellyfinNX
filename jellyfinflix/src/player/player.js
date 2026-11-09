@@ -1,6 +1,6 @@
 // Full-screen player: Samsung AVPlay, Netflix-style controls, Skip Intro, next-episode countdown,
 // resume position and playback reporting so Continue Watching stays right.
-import { el, fmtClock, epLabel, metrics, fmtRuntime } from '../util.js';
+import { el, fmtClock, epLabel, airedLabel, metrics, fmtRuntime } from '../util.js';
 import { app } from '../app.js';
 import { S, get, send, COMMON, slim, cardImg } from '../api.js';
 import { store } from '../store.js';
@@ -186,7 +186,8 @@ async function start(item, opts) {
   const my = st;
   my.t0 = t0;
   U.title.textContent = item.Type === 'Episode' ? item.SeriesName || item.Name : item.Name;
-  U.sub.textContent = item.Type === 'Episode' ? epLabel(item) + '  “' + item.Name + '”' : '';
+  const aired = airedLabel(item); // JTV-27
+  U.sub.textContent = item.Type === 'Episode' ? epLabel(item) + '  “' + item.Name + '”' + (aired ? '   ·   ' + aired : '') : '';
   U.subs.textContent = ''; U.next.classList.remove('on'); U.skip.classList.remove('on'); U.menu.classList.remove('on'); U.eps.close(true);
   U.spin.classList.add('on');
   showUi(false);

@@ -1,6 +1,6 @@
 // "More Info" overlay: artwork, facts, Play/Resume, My List, More (Fix Audio / Fetch Subtitle / genres + cast),
 // seasons + episodes, More Like This. Kept calm on purpose: one meta line, a 3-line overview, one row of pill buttons.
-import { el, debounce, fmtRuntime, epLabel, progressPct, metrics, setFlag } from '../util.js';
+import { el, debounce, fmtRuntime, epLabel, airedLabel, progressPct, metrics, setFlag } from '../util.js';
 import { app } from '../app.js';
 import { S, get, send, COMMON, slim, backdropImg, logoImg, invalidate } from '../api.js';
 import { Rows } from '../ui/rows.js';
@@ -126,6 +126,8 @@ function fillInfo(it, f) {
   if (it.Type !== 'Series' && it.RunTimeTicks) m.push(fmtRuntime(it.RunTimeTicks));
   if (it.Type === 'Series' && f && f.ChildCount) m.push(f.ChildCount + (f.ChildCount === 1 ? ' Season' : ' Seasons'));
   if (it.CommunityRating) m.push(it.CommunityRating.toFixed(1) + '/10');
+  const aired = airedLabel(it.PremiereDate ? it : f || it); // JTV-27: when this episode aired
+  if (aired) m.push(aired);
   D.metaT.textContent = m.join('   ·   ');
   D.ov.textContent = it.Overview || '';
   const p = target ? progressPct(target) : 0;

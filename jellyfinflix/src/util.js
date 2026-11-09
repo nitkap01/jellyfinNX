@@ -44,6 +44,23 @@ export function progressPct(it) {
   return 0;
 }
 
+// JTV-27: the day an episode first aired, as "22nd September 1994" (Jellyfin's PremiereDate is the air date at UTC midnight)
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export function fmtAirDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const day = d.getUTCDate(), t = day % 100;
+  const sfx = t >= 11 && t <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[day % 10] || 'th';
+  return day + sfx + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+}
+/** "Aired 22nd September 1994" for an episode with an air date, else '' */
+export function airedLabel(it) {
+  if (!it || it.Type !== 'Episode') return '';
+  const s = fmtAirDate(it.PremiereDate);
+  return s ? 'Aired ' + s : '';
+}
+
 export function epLabel(it) {
   if (it.Type !== 'Episode') return '';
   const s = it.ParentIndexNumber, e = it.IndexNumber;
