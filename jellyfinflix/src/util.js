@@ -54,16 +54,16 @@ export function fmtAirDate(iso) {
   const sfx = t >= 11 && t <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[day % 10] || 'th';
   return day + sfx + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
 }
-/** "Aired 22nd September 1994" for an episode with an air date, else '' */
+/** "Aired 22nd September 1994" for an episode, "Released 22nd September 2006" for a movie (with a date), else '' */
 export function airedLabel(it) {
-  if (!it || it.Type !== 'Episode') return '';
+  if (!it || (it.Type !== 'Episode' && it.Type !== 'Movie')) return '';
   const s = fmtAirDate(it.PremiereDate);
-  return s ? 'Aired ' + s : '';
+  return s ? (it.Type === 'Movie' ? 'Released ' : 'Aired ') + s : '';
 }
 
-/** JTV-27: how long ago an episode aired, in whole years ("32 years ago"), for the line under the facts */
+/** JTV-27: how long ago an episode aired / a movie was released, in whole years ("32 years ago"), for the line under the facts */
 export function agoLabel(it, now = Date.now()) {
-  if (!it || it.Type !== 'Episode' || !it.PremiereDate) return '';
+  if (!it || (it.Type !== 'Episode' && it.Type !== 'Movie') || !it.PremiereDate) return '';
   const t = new Date(it.PremiereDate).getTime();
   if (isNaN(t) || t > now) return '';
   const y = Math.floor((now - t) / (365.2425 * 864e5));
