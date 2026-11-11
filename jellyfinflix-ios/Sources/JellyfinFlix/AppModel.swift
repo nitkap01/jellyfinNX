@@ -4,6 +4,7 @@
 import SwiftUI
 import UIKit
 import Network
+import Security
 import JFKit
 
 struct SavedLogin: Codable, Identifiable, Hashable {
@@ -70,11 +71,11 @@ final class AppModel: ObservableObject {
             deviceId = id
         }
         if let data = d.data(forKey: "addresses"), let a = try? JSONDecoder().decode(ServerAddresses.self, from: data) { addresses = a } else { addresses = .defaults }
-        if let data = d.data(forKey: "saved"), let s = try? JSONDecoder().decode([SavedLogin].self, from: data) { saved = s }
         quality = Quality(rawValue: d.integer(forKey: "quality")) ?? .original
         cellularQuality = Quality(rawValue: d.integer(forKey: "cellularQuality")) ?? .q8
         autoplayNext = d.object(forKey: "autoplayNext") as? Bool ?? true
         mediaFixURL = d.string(forKey: "mediaFixURL") ?? MediaFixClient.defaultURL
+        if let data = d.data(forKey: "saved"), let s = try? JSONDecoder().decode([SavedLogin].self, from: data) { saved = s }
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let cell = path.usesInterfaceType(.cellular) && !path.usesInterfaceType(.wifi)
             Task { @MainActor in self?.onCellular = cell }
