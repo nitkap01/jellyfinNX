@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Mac launchd job: re-install JellyfinFlix every 6 days (free Apple ID apps expire after 7).
+     Install only after the owner OKs: cp to ~/Library/LaunchAgents/ and `launchctl load` it. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key><string>com.jellyfinflix.reinstall</string>
+	<key>ProgramArguments</key>
+	<array><string>/bin/bash</string><string>-lc</string><string>~/jellyfinflix/mac-install.sh</string></array>
+	<key>StartInterval</key><integer>518400</integer>
+	<key>RunAtLoad</key><false/>
+</dict>
+</plist>
