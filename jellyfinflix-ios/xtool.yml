@@ -1,0 +1,5 @@
+version: 1
+bundleID: com.nitkap01.jellyfinflix
+product: JellyfinFlix
+infoPath: Resources/Info.plist
+iconPath: Resources/AppIcon.png

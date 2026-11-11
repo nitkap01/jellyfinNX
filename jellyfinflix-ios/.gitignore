@@ -1,0 +1,10 @@
+.DS_Store
+/.build
+/Packages
+xcuserdata/
+DerivedData/
+.swiftpm/
+.netrc
+/xtool
+# preview PNGs carry real film/show artwork from the home server: kept local, not pushed (public repo)
+design/preview/

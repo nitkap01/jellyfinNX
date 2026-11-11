@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JellyfinFlix iPhone Mockups</title>
+<!--
+  Phone screen mockups for the JellyfinFlix iPhone app (JTV-28). Same look as the TV app (jellyfinflix/src/style.css):
+  near-black #0b0b0d, red accent #e50914, white pill buttons. Pictures come live from the home Jellyfin server
+  (image URLs need no login). Open with ?srv=http://192.168.0.154:8097 if jellyfin.home does not resolve.
+  Frames are 390x844 points (iPhone 15/16); the player frames are landscape 844x390.
+-->
+<style>
+:root{
+  --page:#eef0f2; --pagefg:#1b1f24; --pagemute:#5e6670; --line:#d3d8de;
+  --tv:#0b0b0d; --tv2:#141418; --tv3:#1f1f25; --txt:#f4f4f6; --mut:#a3a3ad; --acc:#e50914; --ok:#2fbf71; --amb:#f2a516;
+  --font:-apple-system,"SF Pro Text","SF Pro Display","Helvetica Neue",Arial,system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--page:#0f1215;--pagefg:#e6e9ec;--pagemute:#98a1ab;--line:#262c33;color-scheme:dark}}
+:root[data-theme="dark"]{--page:#0f1215;--pagefg:#e6e9ec;--pagemute:#98a1ab;--line:#262c33;color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page);color:var(--pagefg);font-family:var(--font);font-size:15px;line-height:1.45;padding:24px 16px 48px}
+.wrap{max-width:1500px;margin:0 auto}
+h1{font-size:clamp(24px,3.6vw,36px);letter-spacing:-.01em}
+.sub{color:var(--pagemute);margin:6px 0 22px;max-width:80ch}
+.grid{display:flex;flex-wrap:wrap;gap:34px 28px;align-items:flex-start}
+.cell{display:flex;flex-direction:column;gap:10px}
+.cap{font-weight:650;font-size:15px}
+.cap small{display:block;font-weight:400;color:var(--pagemute);font-size:13px;max-width:390px}
+
+/* phone frame */
+.ph{position:relative;width:390px;height:844px;border-radius:54px;background:var(--tv);overflow:hidden;color:var(--txt);
+  box-shadow:0 0 0 10px #1a1a1d,0 0 0 11px #3a3a40,0 24px 60px rgba(0,0,0,.35);font-size:15px;line-height:1.3}
+.ph.land{width:844px;height:390px}
+.sb{position:absolute;left:0;right:0;top:0;height:50px;display:flex;justify-content:space-between;align-items:center;padding:14px 34px 0 40px;font-weight:600;font-size:16px;z-index:20}
+.sb .r{display:flex;gap:6px;align-items:center;font-size:13px}
+.island{position:absolute;top:11px;left:50%;width:124px;height:36px;margin-left:-62px;border-radius:20px;background:#000;z-index:21}
+.land .island{display:none}
+.home-ind{position:absolute;bottom:8px;left:50%;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.7);z-index:21}
+.scroll{position:absolute;inset:0;overflow:hidden}
+
+/* art */
+.art{position:relative;overflow:hidden;background:linear-gradient(135deg,#2a2a33,#15151a)}
+.art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.art .fb{position:absolute;left:8px;right:8px;bottom:8px;font-size:12px;font-weight:700;color:#ddd}
+
+/* top bar */
+.top{position:absolute;left:0;right:0;top:50px;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:10}
+.brand{font-weight:800;font-size:22px;letter-spacing:.01em}
+.brand b{color:var(--acc)}
+.top .ic{display:flex;gap:18px;align-items:center}
+.av{width:28px;height:28px;border-radius:6px;background:#2c6fd6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.chips{position:absolute;top:102px;left:18px;display:flex;gap:8px;z-index:10}
+.chip{border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:5px 14px;font-size:13px;font-weight:600}
+.chip.on{background:var(--txt);color:#000;border-color:var(--txt)}
+
+/* billboard */
+.bill{position:absolute;left:0;right:0;top:0;height:560px}
+.bill .art{position:absolute;inset:0}
+.bill .shade{position:absolute;inset:0;background:linear-gradient(0deg,var(--tv) 6%,rgba(11,11,13,.55) 40%,rgba(11,11,13,.1) 65%,rgba(11,11,13,.65) 100%)}
+.bill .logo{position:absolute;left:0;right:0;top:300px;display:flex;justify-content:center}
+.bill .logo img{max-width:250px;max-height:96px}
+.bill .meta{position:absolute;left:0;right:0;top:404px;text-align:center;color:#ddd;font-size:13px}
+.bill .meta .dot{margin:0 6px;color:var(--mut)}
+.bill .btns{position:absolute;left:12px;right:12px;top:430px;display:flex;gap:7px;justify-content:center}
+.bill .btns .btn{padding:0 13px;font-size:13.5px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:700;background:rgba(255,255,255,.2);white-space:nowrap}
+.btn.w{background:var(--txt);color:#000}
+.btn.sm{height:34px;font-size:13px;padding:0 13px}
+.btn svg{width:16px;height:16px}
+.bill .prog{position:absolute;left:110px;right:110px;top:484px;height:3px;background:rgba(255,255,255,.25);border-radius:2px}
+.bill .prog i{display:block;height:100%;width:62%;background:var(--acc);border-radius:2px}
+
+/* rows */
+.rows{position:absolute;left:0;right:0;top:508px}
+.row{margin-bottom:18px}
+.row h3{font-size:17px;font-weight:700;margin:0 0 8px 18px}
+.strip{display:flex;gap:8px;padding-left:18px}
+.card{flex:none;width:168px}
+.card .art{height:95px;border-radius:6px}
+.card .bar{height:3px;background:rgba(255,255,255,.22);margin-top:-3px;position:relative;z-index:2;border-radius:0 0 4px 4px}
+.card .bar i{display:block;height:100%;background:var(--acc)}
+.card .t{font-size:12px;color:var(--mut);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.poster{flex:none;width:108px}
+.poster .art{height:160px;border-radius:6px}
+
+/* tab bar */
+.tabs{position:absolute;left:0;right:0;bottom:0;height:84px;background:rgba(11,11,13,.94);border-top:1px solid #1f1f25;display:flex;justify-content:space-around;padding-top:9px;z-index:15}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--mut);width:70px}
+.tab svg{width:24px;height:24px}
+.tab.on{color:var(--txt)}
+
+/* profiles */
+.prof{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding-top:150px}
+.prof h2{font-size:24px;font-weight:600;margin-bottom:36px}
+.pgrid{display:grid;grid-template-columns:repeat(2,124px);gap:28px 34px}
+.pt{display:flex;flex-direction:column;align-items:center;gap:10px;font-size:15px;color:var(--mut)}
+.pt .sq{width:124px;height:124px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:#fff}
+.pt .lock{font-size:12px;color:var(--mut)}
+.pt.add .sq{background:transparent;border:2px solid #3a3a42;color:#8a8a94;font-size:48px;font-weight:300}
+.srv{position:absolute;bottom:58px;left:0;right:0;text-align:center;font-size:13px;color:var(--mut)}
+.srv b{color:var(--ok);font-weight:600}
+.edit{position:absolute;top:62px;right:22px;font-size:15px;font-weight:600}
+
+/* sheets */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:30}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#1c1c21;border-radius:16px 16px 0 0;z-index:31;padding:10px 18px 40px}
+.grab{width:38px;height:5px;border-radius:3px;background:#55555e;margin:0 auto 16px}
+.sheet h4{font-size:17px;margin-bottom:4px}
+.sheet .s{color:var(--mut);font-size:13px;margin-bottom:14px}
+.inp{height:46px;border-radius:10px;background:#2a2a31;display:flex;align-items:center;padding:0 14px;font-size:16px;color:#eee;margin-bottom:10px}
+.inp.ph2{color:#77777f}
+.mi{display:flex;align-items:center;gap:14px;padding:14px 2px;border-bottom:1px solid #2a2a31;font-size:16px}
+.mi:last-child{border-bottom:0}
+.mi svg{width:22px;height:22px;flex:none}
+.mi .r{margin-left:auto;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px}
+.ok{background:rgba(47,191,113,.18);color:var(--ok)}
+.amb{background:rgba(242,165,22,.18);color:var(--amb)}
+.mi .sub2{font-size:12px;color:var(--mut);display:block}
+
+/* details */
+.dhero{position:absolute;left:0;right:0;top:0;height:300px}
+.dhero .art{position:absolute;inset:0}
+.dhero .shade{position:absolute;inset:0;background:linear-gradient(0deg,var(--tv) 2%,rgba(11,11,13,0) 55%,rgba(11,11,13,.5) 100%)}
+.back{position:absolute;top:58px;left:14px;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:12}
+.dbody{position:absolute;left:0;right:0;top:250px;padding:0 18px}
+.dlogo img{max-width:220px;max-height:70px}
+.dmeta{display:flex;gap:8px;align-items:center;font-size:13px;color:#ccc;margin:10px 0 12px;flex-wrap:wrap}
+.badge{border:1px solid #777;border-radius:3px;padding:0 5px;font-size:11px}
+.fixed{background:rgba(47,191,113,.18);color:var(--ok);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.wide{display:flex;width:100%;height:44px;border-radius:999px;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:16px;margin-bottom:8px}
+.wide.w{background:var(--txt);color:#000}
+.wide.g{background:#2a2a31}
+.left{font-size:12px;color:var(--mut);margin:-2px 0 8px;display:flex;align-items:center;gap:8px}
+.left .pb{flex:1;height:3px;background:#333;border-radius:2px}.left .pb i{display:block;height:100%;width:62%;background:var(--acc)}
+.ov{font-size:13.5px;color:#ddd;line-height:1.4;margin:6px 0 12px}
+.acts{display:flex;justify-content:space-around;margin:4px 0 14px}
+.act{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;color:var(--mut)}
+.act svg{width:24px;height:24px;color:var(--txt)}
+.seas{display:flex;align-items:center;gap:6px;font-weight:700;font-size:15px;border-top:3px solid var(--acc);padding-top:10px;width:max-content;margin-bottom:12px}
+.ep{display:flex;gap:10px;margin-bottom:14px}
+.ep .art{width:130px;height:73px;border-radius:5px;flex:none}
+.ep .pl{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px;border-radius:50%;border:1.5px solid #fff;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:2}
+.ep .nm{font-size:14px;font-weight:600}
+.ep .rt{font-size:12px;color:var(--mut)}
+.ep .ebar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.25);z-index:2}.ep .ebar i{display:block;height:100%;background:var(--acc)}
+.epov{font-size:12px;color:var(--mut);margin-top:-8px;margin-bottom:14px}
+.now{color:var(--acc);font-size:11px;font-weight:700}
+
+/* search */
+.sbox{position:absolute;top:104px;left:16px;right:16px;height:40px;border-radius:10px;background:#2a2a31;display:flex;align-items:center;gap:8px;padding:0 12px;color:#ddd;font-size:16px}
+.sres{position:absolute;top:160px;left:0;right:0}
+.sres h3{font-size:17px;margin:0 0 10px 16px}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px}
+.sgrid .art{height:166px;border-radius:5px}
+.slist{padding:0 16px}
+.sl{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.sl .art{width:130px;height:73px;border-radius:5px;flex:none}
+.sl .t{font-size:14px;font-weight:600}.sl .m{font-size:12px;color:var(--mut)}
+.sl .pbtn{margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid #fff;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* player */
+.vid{position:absolute;inset:0}
+.vid .art{position:absolute;inset:0}
+.pshade{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.85),rgba(0,0,0,.2) 40%,rgba(0,0,0,.2) 70%,rgba(0,0,0,.7))}
+.ptop{position:absolute;top:20px;left:54px;right:54px;display:flex;align-items:center;gap:14px;z-index:5}
+.ptop .t{flex:1;text-align:center;font-size:14px;font-weight:600}
+.ptop .t span{color:var(--mut);font-weight:400}
+.clock{position:absolute;top:18px;right:54px;text-align:right;z-index:6}
+.clock b{display:block;font-size:22px;font-weight:600}
+.clock small{font-size:12px;color:#ccc}
+.mid{position:absolute;left:0;right:0;top:50%;margin-top:-30px;display:flex;justify-content:center;gap:76px;align-items:center;z-index:5}
+.mid svg{width:40px;height:40px}
+.mid .pp svg{width:58px;height:58px}
+.pbot{position:absolute;left:54px;right:54px;bottom:20px;z-index:5}
+.track{display:flex;align-items:center;gap:12px;font-size:12px;color:#ddd}
+.track .tl{flex:1;height:4px;background:rgba(255,255,255,.3);border-radius:2px;position:relative}
+.track .tl i{position:absolute;left:0;top:0;bottom:0;width:41%;background:var(--acc);border-radius:2px}
+.track .tl b{position:absolute;left:41%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;background:var(--acc)}
+.pacts{display:flex;justify-content:center;gap:28px;margin-top:12px;font-size:12px;font-weight:600}
+.pacts span{display:flex;align-items:center;gap:6px}
+.pacts svg{width:18px;height:18px}
+.skip{position:absolute;right:54px;bottom:84px;z-index:6;background:rgba(30,30,34,.85);border:1px solid #555;border-radius:6px;padding:9px 16px;font-weight:700;font-size:14px}
+.next{position:absolute;right:44px;bottom:28px;width:440px;background:rgba(20,20,24,.94);border:1px solid #333;border-radius:12px;padding:12px;display:flex;gap:12px;z-index:6;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.next .art{width:150px;height:84px;border-radius:6px;flex:none}
+.next .lab{font-size:10px;letter-spacing:.12em;color:var(--mut);font-weight:700}
+.next .nm{font-size:14px;font-weight:700;margin:2px 0}
+.next .rt{font-size:12px;color:var(--mut)}
+.next .bb{display:flex;gap:8px;margin-top:8px}
+.next .bb .btn{flex:1;min-width:0;height:32px;font-size:13px;padding:0 8px;position:relative;overflow:hidden}
+.next .bb .btn.w i{position:absolute;left:0;top:0;bottom:0;width:60%;background:rgba(229,9,20,.28)}
+.next .bb .btn span{position:relative}
+.sheetL{position:absolute;right:0;top:0;bottom:0;width:360px;background:rgba(22,22,26,.97);z-index:8;padding:22px 26px;display:flex;gap:24px}
+.sheetL .col{flex:1}
+.sheetL h5{font-size:13px;color:var(--mut);margin-bottom:8px;font-weight:700;letter-spacing:.04em}
+.sheetL .o{padding:7px 0;font-size:14px;display:flex;gap:8px}
+.sheetL .o.on{font-weight:700}
+.sheetL .o .ck{width:14px;color:var(--acc)}
+.note{font-size:13px;color:var(--pagemute);max-width:844px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>JellyfinFlix for iPhone: screen designs</h1>
+  <p class="sub">Same look as JellyfinFlix on the TV (black, red accent, white rounded buttons), reshaped for a phone: tall screens for browsing, sideways for watching. Pictures load live from the home Jellyfin server.</p>
+  <div class="grid" id="grid"></div>
+  <p class="note" style="margin-top:28px">Frames are iPhone 15/16 size (390 x 844 points). The player turns sideways on its own. Fix Audio and Fetch Subtitle use the same server helper the TV uses and only show for admin profiles.</p>
+</div>
+<script>
+const P = new URLSearchParams(location.search);
+const SRV = (P.get('srv') || 'http://jellyfin.home').replace(/\/+$/, '');
+const I = { // real items on the home server (ids are not secret; images need no login)
+  s70: 'c19aeb79962eb8c4fe08da74ea4a3396', bbt: '113414910b5bd8a3cfac1a2945132b9e', love: '02adb852b13e0acf2e9d8f8dda2dd583',
+  dial: '30aade1bb3cd5d28dd7afc26638aa758', skull: '53380bc84f207e35064080e6dc37680b', crus: 'd807f3c5f449fa552fb43f3091397bc8',
+  mars: '0448c6b8de3e39bf3fd01a6eed35be26', strange: 'b452e258d7156d253f608342820faf63', death: '10afc9b9da49c570dfe11dc2a92d3b37',
+  friends: '344278fb31c13d3e9d8c12ab583b97d8', office: '7f4e54f4e11d74fd2af0ed3598669bf7', odyssey: '862975dce5ef14f63ebedb8a81ec47ea',
+  resi: 'e41cbd21503c2d8aa31754360f857009', dyatlov: '45028d64a5884fe0709f42e3fd6fae23', gonjiam: 'b6a08332ac06bdb58f6e75135ddf6c8b',
+  pyramid: '9df32b7073094d01ec6991bda500958d', fright: '18d863052f999ec810d226cb6d158f11', tunnel: 'e3f2651101499b1bb9a35745b34f1bd5',
+  e1: '73e16e913de89c838be157d432eb6d7e', e2: 'e511a1cb5321f1478baad895149cf0b9', e3: '52f1b421f049841959f827e24e3d2a6b', e4: '282f2842b8e21b319d6f28cfbafd8afa', e5: 'ad5f4af0cc30bd4a7493c44e122690af',
+};
+const im = (id, type, w) => SRV + '/Items/' + id + '/Images/' + type + '?fillWidth=' + w + '&quality=80';
+const art = (id, type, w, label, cls, extra) => '<div class="art ' + (cls || '') + '"' + (extra || '') + '><span class="fb">' + (label || '') + '</span><img src="' + im(id, type, w) + '" onerror="this.remove()" alt=""></div>';
+const ICN = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.2v.6"/></svg>',
+  restart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  dots: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l9 8h-3v9h-4.5v-6h-3v6H6v-9H3z"/></svg>',
+  film: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>',
+  tv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>',
+  back: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 5l-7 7 7 7"/></svg>',
+  close: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  cast: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18a3 3 0 0 1 3 3M3 14a7 7 0 0 1 7 7M3 10a11 11 0 0 1 11 11"/><path d="M3 7V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/></svg>',
+  rw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4 3.5v4h4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700">10</text></svg>',
+  ff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M20 3.5v4h-4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700">10</text></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>',
+  sub: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 13h4M13 13h4M7 16h7"/></svg>',
+  eps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="14" height="12" rx="1.5"/><path d="M7 4h14v12"/></svg>',
+  nexte: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5v14l10-7zM17 5h2.5v14H17z"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  cc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10.5 10.2a2.5 2.5 0 1 0 0 3.6M17.5 10.2a2.5 2.5 0 1 0 0 3.6"/></svg>',
+  dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  inf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+  thumb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 11v9H4v-9zM7 11l4-7a2 2 0 0 1 2.8 2.4L13 10h6a2 2 0 0 1 2 2.4l-1.4 6A2 2 0 0 1 17.6 20H7"/></svg>',
+};
+const sb = (t, land) => '<div class="sb"' + (land ? ' style="padding:10px 40px 0"' : '') + '><span>' + (t || '9:41') + '</span><span class="r"><svg width="18" height="11" viewBox="0 0 18 11" fill="#fff"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg><svg width="16" height="11" viewBox="0 0 16 11" fill="#fff"><path d="M8 2.2c2.2 0 4.2.9 5.7 2.3l1.3-1.3A9.9 9.9 0 0 0 8 .3 9.9 9.9 0 0 0 1 3.2l1.3 1.3A8 8 0 0 1 8 2.2zm0 3.6c1.2 0 2.3.5 3.1 1.2l1.3-1.3A6.2 6.2 0 0 0 8 3.9 6.2 6.2 0 0 0 3.6 5.7L4.9 7A4.4 4.4 0 0 1 8 5.8zM8 9.4l1.6-1.6a2.3 2.3 0 0 0-3.2 0z"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3" fill="none" stroke="#fff" opacity=".5"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="#fff"/><rect x="23" y="4" width="1.5" height="4" rx=".7" fill="#fff" opacity=".5"/></svg></span></div>';
+const frame = (cap, small, inner, land) => '<div class="cell"><div class="cap">' + cap + '<small>' + small + '</small></div><div class="ph' + (land ? ' land' : '') + '"><div class="island"></div>' + (land ? '' : sb()) + inner + '<div class="home-ind"></div></div></div>';
+const tabs = (on) => '<div class="tabs">' + [['Home', ICN.home], ['Shows', ICN.tv], ['Movies', ICN.film], ['My List', ICN.list], ['Search', ICN.search]].map(([n, i]) => '<div class="tab' + (n === on ? ' on' : '') + '">' + i + n + '</div>').join('') + '</div>';
+const cards = (list) => list.map(([id, t, p, type]) => '<div class="card">' + art(id, type || 'Thumb', 340, t) + (p != null ? '<div class="bar"><i style="width:' + p + '%"></i></div>' : '') + '<div class="t">' + t + '</div></div>').join('');
+const posters = (list) => list.map(([id, t]) => '<div class="poster">' + art(id, 'Primary', 220, t) + '</div>').join('');
+
+const screens = [];
+
+// 1 profiles
+screens.push(frame('1. Who is watching?', 'First screen. Tap a profile; a password is asked once and remembered. Edit removes a saved login. Hidden test profiles never show here. Server line at the bottom shows which address is in use.',
+  '<div class="edit">Edit</div><div class="prof"><div class="brand" style="font-size:30px;margin-bottom:46px">Jellyfin<b>Flix</b></div><h2>Who\'s watching?</h2><div class="pgrid">' +
+  '<div class="pt"><div class="sq" style="background:#2c6fd6">N</div>nitin</div>' +
+  '<div class="pt"><div class="sq" style="background:#d6452c">A</div>admin<span class="lock">admin</span></div>' +
+  '<div class="pt add"><div class="sq">+</div>Add profile</div>' +
+  '</div></div><div class="srv"><b>●</b> jellyfin.home &nbsp;·&nbsp; Change server</div>'));
+
+// 2 server sheet
+screens.push(frame('2. Server address', 'Opened from "Change server". Two addresses: the main one and a backup the app tries by itself if the main one does not answer (e.g. away from home on Tailscale).',
+  '<div class="prof" style="opacity:.35"><div class="brand" style="font-size:30px;margin-bottom:46px">Jellyfin<b>Flix</b></div><h2>Who\'s watching?</h2></div>' +
+  '<div class="dim"></div><div class="sheet" style="padding-bottom:300px"><div class="grab"></div><h4>Jellyfin server</h4><div class="s">Works at home and away from home through Tailscale.</div>' +
+  '<div class="s" style="margin:0 0 4px">Main address</div><div class="inp">http://jellyfin.home</div>' +
+  '<div class="s" style="margin:6px 0 4px">Backup address (tried if the main one fails)</div><div class="inp">http://192.168.0.154:8097</div>' +
+  '<div class="mi" style="border:0;padding-top:6px"><span style="color:var(--ok)">●</span><span style="font-size:14px">Connected: jellyfin 10.10.7, 58 ms</span></div>' +
+  '<div class="wide w" style="margin-top:8px">Save</div></div>'));
+
+// 3 home
+screens.push(frame('3. Home', 'Billboard follows Continue Watching like the TV: Resume · Xm left / Start Over / More Info. Rows scroll sideways; tabs at the bottom.',
+  '<div class="bill">' + art(I.s70, 'Backdrop', 1100, '', '', '') + '<div class="shade"></div><div class="logo"><img src="' + im(I.s70, 'Logo', 500) + '" onerror="this.remove()" alt=""></div>' +
+  '<div class="meta">S3 · E5 Roller Disco<span class="dot">•</span>Comedy<span class="dot">•</span>Family</div>' +
+  '<div class="btns"><span class="btn w">' + ICN.play + 'Resume · 8m left</span><span class="btn">' + ICN.restart + 'Start Over</span><span class="btn">' + ICN.info + 'Info</span></div><div class="prog"><i></i></div></div>' +
+  '<div class="top"><div class="brand">Jellyfin<b>Flix</b></div><div class="ic">' + ICN.cast.replace('width="22"', 'width="22" style="opacity:.0"') + '<div class="av">N</div></div></div>' +
+  '<div class="rows">' +
+  '<div class="row"><h3>Continue Watching for nitin</h3><div class="strip">' + cards([[I.e5, "S3:E5 Roller Disco", 62, 'Primary'], [I.skull, 'Crystal Skull', 34], [I.bbt, 'The Big Bang Theory', 80]]) + '</div></div>' +
+  '<div class="row"><h3>My List</h3><div class="strip">' + cards([[I.love, 'Love Actually'], [I.crus, 'The Last Crusade'], [I.office, 'The Office']]) + '</div></div>' +
+  '<div class="row"><h3>Recently Added in Movies</h3><div class="strip">' + posters([[I.odyssey, 'The Odyssey'], [I.resi, 'Resident Evil'], [I.dyatlov, 'Dyatlov Pass'], [I.gonjiam, 'Gonjiam']]) + '</div></div>' +
+  '</div>' + tabs('Home')));
+
+// 4 details
+screens.push(frame('4. Details (a show)', 'Big Play/Resume button, Start Over, then My List · More · Rate. Seasons picker and episodes with progress bars. Green chip = audio already fixed.',
+  '<div class="dhero">' + art(I.s70, 'Backdrop', 800) + '<div class="shade"></div></div><div class="back">' + ICN.back + '</div>' +
+  '<div class="dbody"><div class="dlogo"><img src="' + im(I.s70, 'Logo', 440) + '" onerror="this.outerHTML=\'<b style=font-size:26px>That \\\'70s Show</b>\'" alt=""></div>' +
+  '<div class="dmeta"><span>1998</span><span class="badge">IN-U</span><span>8 Seasons</span><span>★ 7.9</span><span class="badge">HD</span><span class="fixed">Audio fixed</span></div>' +
+  '<div class="wide w">' + ICN.play.replace('<svg', '<svg width="20" height="20"') + 'Resume S3:E5</div>' +
+  '<div class="left"><span class="pb"><i></i></span>8m left</div>' +
+  '<div class="wide g">' + ICN.restart.replace('<svg', '<svg width="18" height="18"') + 'Start Over</div>' +
+  '<div class="ov">Crank up the 8-track and flash back to a time when platform shoes and puka shells were all the rage in this hilarious retro-sitcom.</div>' +
+  '<div class="acts"><div class="act">' + ICN.check + 'My List</div><div class="act">' + ICN.thumb + 'Rate</div><div class="act">' + ICN.dots + 'More</div></div>' +
+  '<div class="seas">Season 3 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>' +
+  [[I.e4, '4. Too Old to Trick or Treat…', '22m', null], [I.e5, '5. Roller Disco', '8m left', 62]].map(([id, n, r, p]) => '<div class="ep"><div class="art" style="width:130px;height:73px;border-radius:5px">' + '<img src="' + im(id, 'Primary', 280) + '" onerror="this.remove()" alt=""><div class="pl">' + ICN.play.replace('<svg', '<svg width="14" height="14"') + '</div>' + (p ? '<div class="ebar"><i style="width:' + p + '%"></i></div>' : '') + '</div><div><div class="nm">' + n + '</div><div class="rt">' + r + (p ? ' · <span class="now">Up next</span>' : '') + '</div></div></div>').join('') +
+  '</div>'));
+
+// 5 more sheet
+screens.push(frame('5. More menu', 'Same actions as the TV More menu: Fix Audio (shows Audio fixed / running % / failed) and Fetch Subtitle, admin profiles only, plus mark watched and the details block.',
+  '<div class="dhero">' + art(I.skull, 'Backdrop', 800) + '<div class="shade"></div></div>' +
+  '<div class="dim"></div><div class="sheet"><div class="grab"></div><h4>Indiana Jones and the Kingdom of the Crystal Skull</h4><div class="s">2008 · 2h 2m · 3 audio tracks</div>' +
+  '<div class="mi">' + ICN.speaker + '<span>Fix Audio<span class="sub2">Make dialogue easier to hear</span></span><span class="r amb">Fixing 42%</span></div>' +
+  '<div class="mi">' + ICN.cc + '<span>Fetch Subtitle<span class="sub2">Find an English subtitle</span></span></div>' +
+  '<div class="mi">' + ICN.check + '<span>Mark as watched</span></div>' +
+  '<div class="mi">' + ICN.inf + '<span>Details<span class="sub2">Action, Adventure · Harrison Ford, Cate Blanchett · Steven Spielberg</span></span></div>' +
+  '</div>'));
+
+// 6 search
+screens.push(frame('6. Search', 'Results while typing: films and shows as posters first, episodes below (same order rule as the TV).',
+  '<div class="top" style="top:50px"><div style="font-size:28px;font-weight:800">Search</div></div>' +
+  '<div class="sbox">' + ICN.search.replace('<svg', '<svg width="18" height="18"') + 'indiana<span style="margin-left:auto;color:#888">' + ICN.close.replace('width="22" height="22"', 'width="16" height="16"') + '</span></div>' +
+  '<div class="sres"><h3>Movies &amp; Shows</h3><div class="sgrid">' + [I.dial, I.skull, I.crus].map((id) => art(id, 'Primary', 240)).join('') + '</div>' +
+  '<h3 style="margin-top:18px">Top Results</h3><div class="slist">' +
+  [[I.crus, 'The Last Crusade', '1989 · 2h 7m'], [I.skull, 'Kingdom of the Crystal Skull', '2008 · 2h 2m'], [I.dial, 'The Dial of Destiny', '2023 · 2h 34m']].map(([id, t, m]) => '<div class="sl">' + art(id, 'Thumb', 280) + '<div><div class="t">' + t + '</div><div class="m">' + m + '</div></div><div class="pbtn">' + ICN.play.replace('<svg', '<svg width="14" height="14"') + '</div></div>').join('') +
+  '</div></div>' + tabs('Search')));
+
+// 7 player paused
+screens.push(frame('7. Player (paused)', 'Turns sideways. Tap shows controls; double-tap left/right skips 10 s. While paused, the clock and "Ends at" show top right (like the TV). Skip Intro when the server knows the intro.',
+  '<div class="vid">' + art(I.e5, 'Primary', 1200) + '</div><div class="pshade"></div>' +
+  '<div class="ptop"><span>' + ICN.close + '</span><div class="t">That \'70s Show <span>S3:E5 Roller Disco</span></div><span style="width:60px"></span></div>' +
+  '<div class="clock"><b>9:41 PM</b><small>Ends at 9:50 PM</small></div>' +
+  '<div class="mid"><span>' + ICN.rw + '</span><span class="pp">' + ICN.play + '</span><span>' + ICN.ff + '</span></div>' +
+  '<div class="pbot"><div class="track"><span>13:51</span><div class="tl"><i></i><b></b></div><span>-8:12</span></div>' +
+  '<div class="pacts"><span>' + ICN.eps + 'Episodes</span><span>' + ICN.sub + 'Audio &amp; Subtitles</span><span>' + ICN.nexte + 'Next Episode</span><span>' + ICN.dots + 'More</span></div></div>', true));
+
+// 8 audio & subtitles
+screens.push(frame('8. Audio & Subtitles', 'Panel slides in from the right. Picture subtitles (PGS) are burned in by the server only when chosen, like on the TV.',
+  '<div class="vid">' + art(I.love, 'Backdrop', 1200) + '</div><div class="pshade" style="background:rgba(0,0,0,.5)"></div>' +
+  '<div class="sheetL"><div class="col"><h5>AUDIO</h5>' + ['English · EAC3 5.1', 'English · TrueHD 7.1', 'Commentary · AC3 2.0'].map((t, i) => '<div class="o' + (i === 0 ? ' on' : '') + '"><span class="ck">' + (i === 0 ? '✓' : '') + '</span>' + t + '</div>').join('') +
+  '</div><div class="col"><h5>SUBTITLES</h5>' + ['Off', 'English · SRT', 'English SDH · PGS', 'Hindi · SRT'].map((t, i) => '<div class="o' + (i === 1 ? ' on' : '') + '"><span class="ck">' + (i === 1 ? '✓' : '') + '</span>' + t + '</div>').join('') + '</div></div>', true));
+
+// 9 next episode
+screens.push(frame('9. Next-episode card', 'Near the end of an episode: [Play now · 10] counts down (red bar fills the button) and [Keep watching] cancels it, same as the TV.',
+  '<div class="vid">' + art(I.e4, 'Primary', 1200) + '</div><div class="pshade" style="background:linear-gradient(0deg,rgba(0,0,0,.7),rgba(0,0,0,0) 60%)"></div>' +
+  '<div class="next">' + art(I.e5, 'Primary', 320) + '<div style="flex:1"><div class="lab">NEXT EPISODE</div><div class="nm">S3:E5 · Roller Disco</div><div class="rt">22m</div>' +
+  '<div class="bb"><span class="btn w"><i></i><span>' + ICN.play.replace('<svg', '<svg width="14" height="14"') + ' Play now · 6</span></span><span class="btn"><span>Keep watching</span></span></div></div></div>', true));
+
+document.getElementById('grid').innerHTML = screens.join('');
+</script>
+</body>
+</html>
